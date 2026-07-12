@@ -26,12 +26,12 @@ Deleting a registry key removes the headstone, not the body. The entry disappear
 
 This matters because the registry is where attackers leave some of their most incriminating traces. Persistence mechanisms, malware configuration, and records of execution all pass through it. Threat actors respond by cleaning up: Via (2019) observed that advanced persistent threat actors frequently "utilize anti-forensic techniques to hide their tracks" from incident responders, and deleting registry artifacts is one of the cheapest such techniques available to them. A responder who only inspects the live registry will conclude there is nothing to find.
 
-The problem this article addresses is therefore twofold. First, defenders new to Windows forensics often do not understand *why* deleted registry data survives, or under what conditions it can be recovered. Second, most introductory material treats "recovering a deleted key" as a single act, when in fact recovering the data and recovering its original location are two different achievements with very different evidential value.
+The problem this article addresses is therefore twofold. First, defenders new to Windows forensics often do not understand *why* deleted registry data survives, or under what conditions it can be recovered. Second, there are premises which suggest that "recovering a deleted key" as a single act, when in fact recovering the data and recovering its original location are two different achievements with very different evidential value.
 
 This article makes three contributions:
 
-1. A plain-language explanation of why deleted registry data persists, and what "slack" and "unallocated space" actually mean.
-2. A recovery exercise using free tools, reporting both a successful located recovery (validated against ground truth) and an honest account of where live recovery failed.
+1. A beginner-friendly explanation of why deleted registry data persists, and what "slack" and "unallocated space" actually mean.
+2. A recovery exercise using free tools, reporting both a successful located recovery (validated against ground truth) and an honest account of where the author's live recovery failed.
 3. An updated assessment of the registry recovery sources documented in the 2019 FireEye research, identifying which remain viable on modern Windows and which are now historical.
 
 Section 2 provides the background and literature necessary to understand registry deletion. Section 3 states the threat model. Section 4 reviews the four recovery sources. Section 5 describes the methodology of the recovery exercise. Section 6 reports the results. Section 7 discusses their meaning and limitations. Sections 8 and 9 give recommendations and conclusions.
