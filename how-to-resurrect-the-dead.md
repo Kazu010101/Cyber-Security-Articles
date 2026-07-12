@@ -115,7 +115,7 @@ If deleted registry data is a body, then Windows maintains four kinds of grave, 
 
 ![transactionallog12](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/transactionallog12.png)
 
-*Figure 1. Transacional logs (.LOG1 and .LOG2) for NTUSER.DAT viewed from powershell*
+*Figure 1. Transactional logs (.LOG1 and .LOG2) for NTUSER.DAT viewed from powershell*
 
 **Mechanism.** Every registry write is journaled to the hive's .LOG1/.LOG2 files before being committed (Section 2.2). Because the logs are a ring buffer, they retain a rolling window of recent registry history, ordered by sequence number.
 
@@ -150,7 +150,7 @@ If deleted registry data is a body, then Windows maintains four kinds of grave, 
 | Unallocated hive cells | Shallow graves | Alive | Alive |
 | Transaction logs (.LOG1/.LOG2) | Coroner's notes | Alive | Alive, primary technique |
 | Transactional registry (.TxR) | Niche archive | Alive (Vista to 8.1) | Dead |
-| RegBack backups | Body doubles | Alive | Empty by default, can be re-enabled |
+| RegBack backups | Body doubles | Alive | Empty by default |
 | System Restore / VSS hives | Body doubles | Configuration-dependent | Configuration-dependent |
 
 ## 5. Methodology
@@ -176,14 +176,14 @@ The results are presented as four acts: burying a body, watching it disappear, r
 The value `ResurrectionDemo` was created in the Run key of the disposable account's NTUSER.DAT hive, pointing to a non-existent payload path.
 
 ![Planting RessurectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted1.png)
-*Figure 1. The planted `ResurrectionDemo` value in the Run key, viewed in Regedit.*
+*Figure 2. The planted `ResurrectionDemo` value in the Run key, viewed in Regedit.*
 
 ### 6.2 Act 2: The murder
 
 The value was deleted through Regedit. To a responder inspecting the live registry afterwards, the Run key appeared clean and the persistence appeared never to have existed.
 
 ![Deleting ResurrectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted2.png)
-*Figure 2. The same Run key after deletion. The persistence value is absent from the live view.*
+*Figure 3. The same Run key after deletion. The persistence value is absent from the live view.*
 
 ### 6.3 Act 3a: Unassociated recovery, the body without the grave
 
@@ -192,28 +192,28 @@ After repeating Act 1 and Act 2, the author reconstructed deleted keys recovery 
 #### 6.3.3a.1 : Deleted key was captured too late
 
 ![Figure1](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo1.png)
-*Figure 3. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The hive got a dirty capture (the replay ran, deleted records were recovered), but the deletion captured in the log was an unrelated value (`InstallState`) rather than the planted `ResurrectionDemo`, indicating the planted deletion had already been flushed and its cell reused due to registry-heavy activity (Via, 2019). 
+*Figure 4. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The hive got a dirty capture (the replay ran, deleted records were recovered), but the deletion captured in the log was an unrelated value (`InstallState`) rather than the planted `ResurrectionDemo`, indicating the planted deletion had already been flushed and its cell reused due to registry-heavy activity (Via, 2019). 
 
 #### 6.3.3a.2 : Deleted keys captured too fast
 
 ![Figure2](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo2.png)
-*Figure 4. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The recovered value is `New Value #1`, RegSz, with **empty data**. The value name is what regedit assigns a string value the instant a key was created, before it got rename into 'RessurectionDemo' (Honeycutt, 2005). So what got captured and recovered is the value at a moment when it existed but had not been named `ResurrectionDemo` or given its data yet.
+*Figure 5. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The recovered value is `New Value #1`, RegSz, with **empty data**. The value name is what regedit assigns a string value the instant a key was created, before it got rename into 'RessurectionDemo' (Honeycutt, 2005). So what got captured and recovered is the value at a moment when it existed but had not been named `ResurrectionDemo` or given its data yet.
 
 #### 6.3.3a.3 : Reboot after deleted the `ResurrectionDemo` key and captured using kape.exe (CLI) 
 
 ![kapecli.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/kapecli.png)
-*Figure 5. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE CLI. The summary confirms successful carving: **Copied 23 (Deduplicated: 1) out of 24 files in 5.4268 seconds.** The NTUSER.DAT, both its LOG files, plus DEFAULT, usrClass.dat, and their logs were collected. 
+*Figure 6. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE CLI. The summary confirms successful carving: **Copied 23 (Deduplicated: 1) out of 24 files in 5.4268 seconds.** The NTUSER.DAT, both its LOG files, plus DEFAULT, usrClass.dat, and their logs were collected. 
 
 Loading the author's own collected NTUSER.DAT into Registry Explorer, with deleted-record recovery enabled, returned 103 recovered deleted values. All appeared under the Unassociated deleted values node: the data survived, but the parent pointers had been overwritten by prolonged normal system use, so the tool recovered what these values were but not where they had lived.
 
 ![figure3](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo%203.png)
-*Figure 6. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. Each red row is a deleted value carved from unallocated space, but all are unassociated: orphaned data recovered without original registry path, and the 'ResurrectionDemo' key was not captured in Associated Deleted Records. However, Registry Explorer displayed recovered deleted values `ULSAllCategories`, `state`, `LastModified`, `ItemKey`, each flagged as deleted. The selected one (`ULSAllCategories`, RegSz) even shows its recovered data and raw value in the Type viewer at bottom right.*
+*Figure 7. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. Each red row is a deleted value carved from unallocated space, but all are unassociated: orphaned data recovered without original registry path, and the 'ResurrectionDemo' key was not captured in Associated Deleted Records. However, Registry Explorer displayed recovered deleted values `ULSAllCategories`, `state`, `LastModified`, `ItemKey`, each flagged as deleted. The selected one (`ULSAllCategories`, RegSz) even shows its recovered data and raw value in the Type viewer at bottom right.*
 ### 6.4 Act 3b: Associated recovery, the body in its grave, validated
 
 The recovery was repeated against a NIST reference hive. The hive `[nrd]-01-1_delete-keys-with-values-but-without-subkeys` was loaded; NIST's technical report documents that two keys were deleted from it via the Windows registry API: `ROOT\0x01_TYPE1_DATA-TYPES` and `ROOT\0x06_TYPE1_BIG-DATA`. Registry Explorer recovered both and placed them under the Associated deleted records node with their full ROOT path reconstructed. The recovered keys matched NIST's documented ground truth.
 
 ![nist registry 1.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/nist%20registry.png)
-*Figure 7. Registry Explorer recovering deleted keys from the NIST CFReDS cfreds-2017-winreg reference hive. The keys `0x01_TYPE1_DATA-TYPES` and `0x06_TYPE1_BIG-DATA` appear as associated deleted records with their full ROOT path intact, matching NIST's documented ground-truth deletions.*
+*Figure 8. Registry Explorer recovering deleted keys from the NIST CFReDS cfreds-2017-winreg reference hive. The keys `0x01_TYPE1_DATA-TYPES` and `0x06_TYPE1_BIG-DATA` appear as associated deleted records with their full ROOT path intact, matching NIST's documented ground-truth deletions.*
 
 ### 6.5 Act 4: The empty grave
 
@@ -221,17 +221,17 @@ Inspecting `C:\Windows\System32\Config\RegBack` on the Windows 11 host returned 
 
 ![Regback](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/regback.png)
 
-*Figure 8. The RegBack directory on Windows 11, showing 0 files and 0 bytes.*
+*Figure 9. The RegBack directory on Windows 11, showing 0 files and 0 bytes.*
 
 ## 7. Discussion
 
 ### 7.1 Recovering data versus recovering the crime scene
 
-Read together, Figures 3 and 4 make the central technical point of this article visible. Both recoveries resurrected deleted data. Only the second recovered the crime scene: the location that turns a recovered value into evidence of where an attacker acted. This is the practical consequence of the associated/unassociated distinction set out in Section 2.4, and it aligns with Carvey's (2008) observation that a recovered value without a parent key is of little evidential use on its own. For an incident responder, the lesson is that a successful carve is not automatically a useful finding; the value's original location must be established, whether directly through an associated record, or indirectly through transaction logs, parent-key timestamps, or a backup.
+Read together, Figures 4, 5, and 8 make the central technical point of this article visible. All those recoveries resurrected deleted data, yet only figure 8 recovered the crime scene: the location that turns a recovered value into evidence of where an attacker acted. This is the practical consequence of the associated/unassociated distinction set out in Section 2.4, and it aligns with Carvey's (2008) observation that a recovered value without a parent key is of little evidential use on its own. For an incident responder, the lesson is that a successful carve is not automatically a useful finding; the value's original location must be established, whether directly through an associated record, or indirectly through transaction logs, parent-key timestamps, or a backup.
 
-### 7.2 The recovery window on modern Windows: an honest negative result
+### 7.2 The recovery window on Windows 11: an honest negative result
 
-A finding emerged during this exercise that is worth reporting because it contradicts how introductory tutorials usually present the technique. Repeated attempts to recover the specific `ResurrectionDemo` value from live systems, as an associated record with its Run-key path intact, were unsuccessful. On modern Windows 11 the registry is flushed to disk aggressively and freed cells are reused quickly, especially while Windows Update is active, which was observed to collapse the recovery window and reassign the freed cell before acquisition completed. In several captures the only recoverable deletions were unrelated background operations rather than the planted value, and the author's live hives yielded only unassociated recoveries. This is consistent both with Via's (2019) finding that registry-heavy activity sharply shortens the transaction-log recovery window, and with the reorganization behaviour documented by Suhanov (n.d.-a), whereby hives are periodically compacted and free space discarded. For this reason, located recovery was demonstrated against the NIST reference dataset, where the deletions are documented and the ground truth is known, rather than against a self-planted value. Far from weakening the demonstration, this negative result characterises a real operational constraint: on a live, busy system, the time window in which a specific deletion remains recoverable with its location could be extremely short.
+A finding emerged during this exercise that is worth reporting because it contradicts how introductory tutorials usually present the technique. Repeated attempts to recover the specific `ResurrectionDemo` value from live systems, as an associated record with its Run-key path intact, were unsuccessful. On modern Windows 11 the registry is flushed to disk aggressively and freed cells are reused quickly, especially while Windows Update is active, which was observed to collapse the recovery window and reassign the freed cell before acquisition completed. In several captures, the only recoverable deletions were unrelated background operations rather than the planted value, and the author's live hives yielded only unassociated recoveries. This is consistent both with Via's (2019) finding that registry-heavy activity sharply shortens the transaction-log recovery window, and with the reorganization behaviour documented by Suhanov (n.d.-a), whereby hives are periodically compacted and free space discarded. For this reason, located recovery was demonstrated against the NIST reference dataset, where the deletions are documented and the ground truth is known, rather than against a self-planted value. The lessons learned from this negative result characterises a real operational constraint: on a live, busy system, the time window in which a specific deletion remains recoverable with its location could be either extremely short, or must be done within a certain running environment.
 
 ### 7.3 Comparison with prior work
 
