@@ -1,15 +1,15 @@
 ---
-title: "How to Resurrect the Dead: Windows Registry Recovery Guide"
+Title: "How to Resurrect the Dead: Windows Registry Recovery Guide"
 tags:
   - dfir
   - windows-forensics
   - registry
   - blue-team
   - portfolio
-type: article
-status: final
-created: 2026-07-10
-audience: Australian readers
+Type: Article
+Version: 0.1
+Created: 2026-07-10
+Audience: Entry level security analyst / digital forensic
 ---
 
 # How to Resurrect the Dead: A Windows Registry Recovery Guide
