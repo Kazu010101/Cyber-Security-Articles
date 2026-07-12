@@ -171,14 +171,14 @@ The results are presented as four acts: burying a body, watching it disappear, r
 
 The value `ResurrectionDemo` was created in the Run key of the disposable account's NTUSER.DAT hive, pointing to a non-existent payload path.
 
-![[Pasted image 20260712142129.png]]
+![Planting RessurectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted1.png)
 *Figure 1. The planted `ResurrectionDemo` value in the Run key, viewed in Regedit.*
 
 ### 6.2 Act 2: The murder
 
 The value was deleted through Regedit. To a responder inspecting the live registry afterwards, the Run key appeared clean and the persistence appeared never to have existed.
 
-![[Pasted image 20260712142158.png]]
+![Deleting ResurrectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted2.png)
 *Figure 2. The same Run key after deletion. The persistence value is absent from the live view.*
 
 ### 6.3 Act 3a: Unassociated recovery, the body without the grave
@@ -187,28 +187,28 @@ After repeating Act 1 and Act 2, the author reconstructed deleted keys recovery 
 
 #### 6.3.3a.1 : Deleted key was captured too late
 
-![[figure demo1.png]]
+![Figure1](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo1.png)
 *Figure 1. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The hive got a dirty capture (the replay ran, deleted records were recovered), but the deletion captured in the log was an unrelated value (`InstallState`) rather than the planted `ResurrectionDemo`, indicating the planted deletion had already been flushed and its cell reused due to registry-heavy activity (Via, 2019). 
 
 #### 6.3.3a.2 : Deleted keys captured too fast
 
-![[Pasted image 20260712145018.png]]
+![Figure2](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo2.png)
 *Figure 2. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The recovered value is `New Value #1`, RegSz, with **empty data**. The value name is what regedit assigns a string value the instant a key was created, before it got rename into 'RessurectionDemo' (Honeycutt, 2005). So what got captured and recovered is the value at a moment when it existed but had not been named `ResurrectionDemo` or given its data yet.
 
 #### 6.3.3a.3 : Reboot after deleted the `ResurrectionDemo` key and captured using kape.exe (CLI) 
 
-![[kapecli.png]]
+![kapecli.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/kapecli.png)
 *Figure 3. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE CLI. The summary confirms successful carving: **Copied 23 (Deduplicated: 1) out of 24 files in 5.4268 seconds.** The NTUSER.DAT, both its LOG files, plus DEFAULT, usrClass.dat, and their logs were collected. 
 
 Loading the author's own collected NTUSER.DAT into Registry Explorer, with deleted-record recovery enabled, returned 103 recovered deleted values. All appeared under the Unassociated deleted values node: the data survived, but the parent pointers had been overwritten by prolonged normal system use, so the tool recovered what these values were but not where they had lived.
 
-![[figure demo 3.png]]
+![figure3](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo%203.png)
 *Figure 4. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. Each red row is a deleted value carved from unallocated space, but all are unassociated: orphaned data recovered without original registry path, and the 'ResurrectionDemo' key was not captured in Associated Deleted Records. However, Registry Explorer displayed recovered deleted values `ULSAllCategories`, `state`, `LastModified`, `ItemKey`, each flagged as deleted. The selected one (`ULSAllCategories`, RegSz) even shows its recovered data and raw value in the Type viewer at bottom right.*
 ### 6.4 Act 3b: Associated recovery, the body in its grave, validated
 
 The recovery was repeated against a NIST reference hive. The hive `[nrd]-01-1_delete-keys-with-values-but-without-subkeys` was loaded; NIST's technical report documents that two keys were deleted from it via the Windows registry API: `ROOT\0x01_TYPE1_DATA-TYPES` and `ROOT\0x06_TYPE1_BIG-DATA`. Registry Explorer recovered both and placed them under the Associated deleted records node with their full ROOT path reconstructed. The recovered keys matched NIST's documented ground truth.
 
-![[nist registry 1.png]]
+![nist registry 1.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/nist%20registry.png)
 *Figure 5. Registry Explorer recovering deleted keys from the NIST CFReDS cfreds-2017-winreg reference hive. The keys `0x01_TYPE1_DATA-TYPES` and `0x06_TYPE1_BIG-DATA` appear as associated deleted records with their full ROOT path intact, matching NIST's documented ground-truth deletions.*
 
 ### 6.5 Act 4: The empty grave
