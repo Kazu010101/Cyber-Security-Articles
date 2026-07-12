@@ -253,7 +253,7 @@ This exercise has several limitations that readers should keep in mind:
 - **The transactional registry findings are historical.** 
 
   Considering that one of the four recovery sources mentioned in Section 4, which is .TxR transactional-registry technique, applies only to Windows Vista through 8.1 and no longer works on Windows 10 or 11, it is then effectively obsolete on modern Windows. It is included for completeness and because older systems still exist out there; however, it is not expected to work on a current or modern machine.
-- **Located recovery used synthetic NIST test keys, not a live persistence value.** 
+- **Located recovery used sampled NIST test keys, not a live persistence value.** 
 
   Through presentation of secondary data, the author proved that recovery can preserve an item's original location (the associated deleted records), but it was done using NIST's ready-made test data (where the "right answer" is documented) rather than using own planted value (ResurrectionDemo Value). This is because live modern Windows 11 kept flushing the planted value before the author could capture it. The capability is real; the specific example is a reference dataset.
 - **Recovered data always needs expert interpretation and corroboration.** 
