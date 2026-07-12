@@ -246,7 +246,7 @@ This exercise has several limitations that readers should keep in mind:
   The author tested one specific type of registry entry, not the full range an attacker might use (services, scheduled tasks, and so on). And it was conducted on a live practice machine for convenience, whereas a real investigation would first make a forensic copy of the disk and work only on that copy. This is because the article is intended as a teaching setup, not a courtroom-grade procedure.
 - **Recovery is timing-dependent and never guaranteed.** 
 
-  By theory, a deleted entry survives only until Windows reuses that space for something else. This means that on a busy system that can happen in seconds. Thus, the premise of "you can always recover it" is false; sometimes the recover attempts are simply too late, and there is no way to guarantee success in advance as the author experienced in this exercise.
+  By theory, a deleted entry survives only until Windows reuses that space for something else. This means that on a busy system that can happen in seconds. Thus, the premise of "you can always recover it" is false; sometimes the recovery attempts are simply too late, and there is no way to guarantee success in advance as the author experienced in this exercise.
 - **The overwritten-value recovery was not reproduced.** 
 
   One powerful technique from the source research (pulling back a value even after it was written over, by reading the change journal) is described here on the authority of Via's (2019) research. Since the author of this article did not perform it personally, it is presented as a citation.
