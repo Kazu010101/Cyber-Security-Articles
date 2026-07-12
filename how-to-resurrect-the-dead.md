@@ -30,7 +30,7 @@ The problem this article addresses is therefore twofold. First, defenders new to
 
 This article makes three contributions:
 
-1. A beginner-friendly explanation of why deleted registry data persists, and what "slack" and "unallocated space" actually mean.
+1. A beginner-friendly, analogical explanation of why deleted registry data persists, and what "slack" and "unallocated space" actually mean.
 2. A recovery exercise using free tools, reporting both a successful located recovery (validated against ground truth) and an honest account of where the author's live recovery failed.
 3. An updated assessment of the registry recovery sources documented in the 2019 FireEye research, identifying which remain viable on modern Windows and which are now historical.
 
@@ -38,7 +38,7 @@ Section 2 provides the background and literature necessary to understand registr
 
 ## 2. Background
 
-### 2.1 The registry as the building manager's logbook
+### 2.1 Analogy: The registry as the building manager's logbook
 
 The registry is the central configuration database of Windows. A useful way to picture it is as a building manager's logbook: every tenant (program), every key handed out (setting), and every scheduled maintenance job (autorun, service, scheduled task) gets written down. In this sense, the majority of programs running on Windows, although not entirely all of them, are highly dependent on the registry (Davis, 2026). The operating system consults it constantly, and so do forensic analysts, because it records what software was installed, what programs ran, what devices were connected, and what users did.
 
@@ -46,7 +46,7 @@ On disk, the logbook is split into a small set of binary files called hives. Acc
 
 Internally, a hive behaves like a miniature filesystem. It consists of a base block (a file header) followed by hive bins, and each bin contains cells, the units that actually store keys, values, and data (Suhanov, n.d.-a; Via, 2019). Those cells are the graves this article is about.
 
-### 2.2 Memory versus disk: the lazy scribe
+### 2.2 Memory versus disk: the lazy scribe analogy
 
 An important detail that most beginner guides skip: Regedit does not show the hive files. It shows the live registry held in memory. The on-disk hive lags behind, because Windows does not write every change to the hive immediately. Davis (2026) complements this fact by describing the hardware hive as 'volatile' as it is built and loaded from the Boot Configuration Data (BCD), existing only in memory.
 
@@ -67,7 +67,7 @@ Two consequences follow. First, recovery is a race against reuse: the busier the
 
 Second, the slack survives best in the original on-disk hive, so acquisition method matters. Exporting a hive with `reg save` or `reg export` produces a re-serialised copy of the live registry that does not reliably preserve all recoverable slack. Testing by Suhanov (2020) found that a default export preserves most deleted data but not all: data beyond the last hive bin is not written to the exported file, so a small fraction of recoverable deleted keys and values (approximately 0.6% in his tests) is lost, while remaining present in the original hive. The safest practice, therefore, is raw acquisition of the hive file rather than an exported copy; this point returns in Section 5.
 
-### 2.4 Associated versus unassociated recovery: does resurrection preserve the crime scene?
+### 2.4 Analogy of Associated versus unassociated recovery: does resurrection preserve the crime scene?
 
 Not all resurrections are equal. When a tool such as Registry Explorer carves deleted records from a hive, it sorts them into two categories, and the difference matters enormously for an investigation.
 
@@ -97,7 +97,7 @@ A recovered registry artifact answers the questions that drive every investigati
 
 Just as importantly, a recovered artifact is rarely conclusive alone. It is just one witness, and witnesses must be corroborated to see if they tell the same story. A resurrected registry entry gains its evidential weight when event logs, file system metadata, and network records tell the same story, which is the same multi-source corroboration discipline that governs digital forensics generally. Recovery, in other words, is not the end of the investigation. It is what reopens it.
 
-## 4. Recovery Sources: The Four Graves
+## 4. Recovery Sources: The Analogy of Four Graves
 
 If deleted registry data is a body, then Windows maintains four kinds of grave, and each demands a different kind of digging. The unallocated cells inside the hive are shallow graves: easy to reach, but easily disturbed. The transaction logs are the coroner's notes: a reliable record of recent deaths. The transactional registry is a niche archive: rarely consulted, occasionally priceless, and now largely sealed. The backups are body doubles: full copies frozen in time, if anyone remembered to make them. This section reviews each, including whether it still works on Windows 10 and 11.
 
