@@ -113,6 +113,10 @@ If deleted registry data is a body, then Windows maintains four kinds of grave, 
 
 ### 4.2 Registry transaction logs (the coroner's notes)
 
+![transactionallog12](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/transactionallog12.png)
+
+*Figure 1. Transacional logs (.LOG1 and .LOG2) for NTUSER.DAT viewed from powershell*
+
 **Mechanism.** Every registry write is journaled to the hive's .LOG1/.LOG2 files before being committed (Section 2.2). Because the logs are a ring buffer, they retain a rolling window of recent registry history, ordered by sequence number.
 
 **What it recovers.** Recent creations, modifications, and deletions, including the state of values before they changed. This produces the most striking finding of the FireEye research: an attacker who overwrites a value before deleting it defeats slack-space recovery, since the original cell content is gone from the hive, yet the original write may still sit in the log. In Via's (2019) experiment, existing tools could not recover the overwritten value, "but the data was still present in the transaction log." Crucially for Section 2.4, the log records the parent key path of each operation, so log replay can restore not only just the value, but also where it lived.
