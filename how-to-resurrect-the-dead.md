@@ -22,7 +22,7 @@ _**Keywords:** Windows registry, digital forensics, Associated Deleted Records, 
 
 ## 1. Introduction
 
-Deleting a registry key removes the headstone, not the body. The entry disappears from Regedit, the analyst's live view comes back clean, and to the untrained eye the evidence is gone. The data, in most cases, is still in the ground.
+Deleting a registry key analogically removes the headstone, not the body. The deleted entry disappears from Windows Regedit, the analyst's live view comes back clean, and to the untrained eye the evidence is seemingly gone. However, the data, in most cases, is still in the ground.
 
 This matters because the registry is where attackers leave some of their most incriminating traces. Persistence mechanisms, malware configuration, and records of execution all pass through it. Threat actors respond by cleaning up: Via (2019) observed that advanced persistent threat actors frequently "utilize anti-forensic techniques to hide their tracks" from incident responders, and deleting registry artifacts is one of the cheapest such techniques available to them. A responder who only inspects the live registry will conclude there is nothing to find.
 
