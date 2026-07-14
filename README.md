@@ -18,7 +18,7 @@ Using NIST CFReDS reference datasets, this guide shows how "deleted" registry da
 
 **Topics:** Windows Registry internals · deleted record recovery · SRUM analysis · NIST CFReDS · forensic tooling
 
-**[Read the article →](./articles/resurrect-the-dead/)** *(update this link to your article's path once published)*
+**[Read the article →](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/how-to-resurrect-the-dead.md)**
 
 ---
 
@@ -30,20 +30,6 @@ Using NIST CFReDS reference datasets, this guide shows how "deleted" registry da
 
 *More articles coming soon.*
 
----
 
-## About
 
-I'm a cybersecurity practitioner focused on the blue team side of the house — SOC operations, digital forensics, and incident response. These articles are where I document what I learn, in plain language, with enough detail that someone else can walk the same path.
 
-Backed by hands-on work in registry and endpoint forensics, threat intelligence, SIEM, and incident response.
-
-## Connect
-
-- **LinkedIn:** [your profile](#)
-- **GitHub:** [your profile](#)
-- **Email:** [your email](#)
-
----
-
-*All content is my own work and intended for educational and defensive security purposes.*
