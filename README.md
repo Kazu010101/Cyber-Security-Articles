@@ -24,7 +24,7 @@ A beginner-friendly, forensic deep-dive into recovering deleted records from the
 
 | # | Article | Focus |
 |---|---------|-------|
-| 01 | How to Resurrect the Dead: Windows Registry Recovery Guide | Registry forensics / DFIR |
+| 01 | [How to Resurrect the Dead: Windows Registry Recovery Guide](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/how-to-resurrect-the-dead.md)| Registry forensics / DFIR |
 
 *More articles coming soon.*
 
