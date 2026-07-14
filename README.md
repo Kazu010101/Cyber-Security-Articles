@@ -12,7 +12,7 @@ Written by **Kazu Suryadikarta**: Melbourne-based SOC analyst and blue team prac
 
 ### How to Resurrect the Dead: Windows Registry Recovery Guide
 
-A forensic deep-dive into recovering deleted records from the Windows Registry, written as a scientific investigation across four narrative acts — from hypothesis to live demonstration.
+A forensic deep-dive into recovering deleted records from the Windows Registry, written as a scientific investigation across four narrative acts from theoretical review to live demonstration.
 
 **Topics:** Windows Registry internals · deleted record recovery · forensic tooling
 
