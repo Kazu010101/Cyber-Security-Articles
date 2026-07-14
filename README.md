@@ -2,9 +2,9 @@
 
 **Digital forensics and incident response, written from the analyst's chair.**
 
-Long-form, hands-on write-ups for SOC analysts and blue teamers — each article walks through a real technique with real tooling, real data, and reproducible steps you can follow in a lab of your own.
+Long-form, hands-on write-ups for SOC analysts and blue teamers, each article walks through a real technique with real tooling, real data, and reproducible steps you can follow in a lab of your own.
 
-Written by **Kazu Suryadikarta** — Melbourne-based SOC analyst and blue team practitioner.
+Written by **Kazu Suryadikarta**: Melbourne-based SOC analyst and blue team practitioner.
 
 ---
 
