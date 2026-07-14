@@ -14,9 +14,7 @@ Written by **Kazu Suryadikarta**: Melbourne-based SOC analyst and blue team prac
 
 A forensic deep-dive into recovering deleted records from the Windows Registry, written as a scientific investigation across four narrative acts — from hypothesis to live demonstration.
 
-Using NIST CFReDS reference datasets, this guide shows how "deleted" registry data lingers on disk, how to recover associated deleted records, and how to work around real-world obstacles like ESE dirty-shutdown states that block SRUM parsing. Every step is documented end-to-end, with a companion VM lab walkthrough so you can reproduce the results yourself.
-
-**Topics:** Windows Registry internals · deleted record recovery · SRUM analysis · NIST CFReDS · forensic tooling
+**Topics:** Windows Registry internals · deleted record recovery · forensic tooling
 
 **[Read the article →](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/how-to-resurrect-the-dead.md)**
 
