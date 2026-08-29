@@ -389,7 +389,7 @@ This is worth stating plainly because it is realistic. Cell reuse happens **per 
 
 ### Credit
 
-This lab was built and documented as part of my ongoing learning through the **CyLynk** platform. Thanks to Sammy Chuck and CyLynk for providing the structure and direction that turned this pile of miserable daydreaming SOC-analyst-to-be's scattered forensic curiosity into an actual, reproducible investigation.
+This lab was built and documented as part of my ongoing learning through the **CyLynk** platform. Thanks to Sammy Chuks and CyLynk for providing the structure and direction that turned this pile of miserable daydreaming SOC-analyst-to-be's scattered forensic curiosity into an actual, reproducible investigation.
 
 ---
 
