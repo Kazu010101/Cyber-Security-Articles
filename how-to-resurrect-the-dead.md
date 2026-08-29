@@ -1,5 +1,5 @@
 ---
-Title: "How to Resurrect the Dead: Windows Registry Recovery Guide"
+Title: "Windows Registry PLab: Resurrecting the Dead (Part 1)"
 tags:
   - dfir
   - windows-forensics
@@ -7,7 +7,7 @@ tags:
   - blue-team
   - portfolio
 Type: Article
-Version: 0.1
+Version: 0.2 (Content Check by Cylynk)
 Created: 2026-07-10
 Audience: Entry level security analyst / digital forensic
 ---
