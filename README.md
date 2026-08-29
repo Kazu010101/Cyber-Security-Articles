@@ -1,6 +1,6 @@
 # Cybersecurity Field Notes
 
-**Digital forensics and incident response, written from the analyst's chair.**
+**Digital forensics and incident response**
 
 Long-form, hands-on write-ups for SOC analysts and blue teamers, each article walks through a real technique with real tooling, real data, and reproducible steps you can follow in a lab of your own.
 
