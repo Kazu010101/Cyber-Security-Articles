@@ -61,6 +61,7 @@ On disk, the logbook is not one file. In fact, there is no actual file path of r
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%201.png" />
 Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Windows Explorer at `C:\Windows\System32\config`
 
+
 | Hive                                        | Location                     | What it holds                      |
 | ------------------------------------------- | ---------------------------- | ---------------------------------- |
 | DEFAULT,<br>SYSTEM, SOFTWARE, SAM, SECURITY | `C:\Windows\System32\Config` | Machine-wide settings, credentials |
@@ -70,6 +71,7 @@ Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Window
 On Windows machines, these Windows Registry files can be accessed from Registry Editor.
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%202.png" />
 Figure 2: Type "reg" on search and look for "Registry Editor". These are called `Root registry keys`, and everything under this area is called a `subkey`. 
+
 
 
 | Registry Keys         | What it stores                                                                                                                                 |
@@ -92,6 +94,7 @@ Before writing dirty data to the primary hive file, the flush process first stor
 
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%203.png" />
 Figure 3: executing the command `dir /a` from `C:\Users\[your username]` on CMD reveals `NTUSER.DAT`, along with its corresponding `ntuser.dat.LOG1` and `ntuser.dat.LOG2`. 
+
 
 > **Analogy:** picture a waiter taking your order. They write it on a notepad first (the log file), then enter it into the till later (the hive). If the till crashes, the notepad still has your order.
 
@@ -282,6 +285,7 @@ Signed in as `regdemo`, the persistence key was created using the two commands b
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%204.png" />
 *Figure 4. The persistence key created successfully under the Run key.*
 
+
 #### Step 2: Force it onto disk
 
 The virtual machine was **restarted**, for all the reasons set out in Section 2.3. Without this, the key would never have reached the hive file and there would have been nothing to recover.
@@ -297,6 +301,7 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo"
 Opening Regedit afterwards, the Run key looks completely clean. To a responder inspecting the live registry, this persistence never existed.
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%205.png" />
 *Figure 5. The Run key after deletion. Nothing to see in Regedit.*
+
 
 The virtual machine was then shut down cleanly, freezing the freed cell in place.
 
