@@ -70,6 +70,7 @@ Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Window
 
 On Windows machines, these Windows Registry files can be accessed from Registry Editor.
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%202.png" />
+
 Figure 2: Type "reg" on search and look for "Registry Editor". These are called `Root registry keys`, and everything under this area is called a `subkey`. 
 
 
@@ -93,6 +94,7 @@ The on-disk hive lags behind. Microsoft (n.d.) documents that the registry uses 
 Before writing dirty data to the primary hive file, the flush process first stores that data in a transaction log file, so that if a crash interrupts the write, the log holds enough information to bring the hive back to a consistent state (Suhanov, n.d.-a). These journal files sit right beside the hive, named `NTUSER.DAT.LOG1` and `NTUSER.DAT.LOG2`.
 
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%203.png" />
+
 Figure 3: executing the command `dir /a` from `C:\Users\[your username]` on CMD reveals `NTUSER.DAT`, along with its corresponding `ntuser.dat.LOG1` and `ntuser.dat.LOG2`. 
 
 
@@ -283,6 +285,7 @@ This is also realistic from a threat perspective. Plenty of real persistence is 
 
 Signed in as `regdemo`, the persistence key was created using the two commands broken down in Section 2.4.
 <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%204.png" />
+
 *Figure 4. The persistence key created successfully under the Run key.*
 
 
