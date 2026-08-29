@@ -12,290 +12,433 @@ Created: 2026-07-10
 Audience: Entry level security analyst / digital forensic
 ---
 
-# How to Resurrect the Dead: A Windows Registry Recovery Guide
-
-## Abstract
-
-_The Windows registry records system configuration, installed software, user activity, and program persistence, which makes it one of the richest sources of evidence on a compromised endpoint. Attackers frequently delete registry entries to hide their activity. This article demonstrates why that deletion rarely destroys the underlying data. When a registry element is deleted, Windows marks its storage cells as unallocated rather than wiping them, and it journals registry writes to transaction log files before committing them to disk; both behaviours leave recoverable traces (Via, 2019; Thomassen, 2008). This article reviews four sources of historical registry data and assesses which remain viable on Windows 11. It then reports a recovery exercise using KAPE, and Eric Zimmerman's Registry Explorer, and draws a distinction that most introductory material omits: the difference between recovering deleted data and recovering it with its original location intact. Recovery of deleted keys with their full path was validated against a NIST reference dataset with documented ground truth. The exercise also found that, on a live modern Windows 11 system, the recovery window for a single deleted value can close before acquisition completes, an honest limitation reported here._
-
-_**Keywords:** Windows registry, digital forensics, Associated Deleted Records, Unassociated Deleted Records, transaction logs, anti-forensics, incident response_
+# Windows Registry PLab: Resurrecting the Dead (Part 1)
 
 ## 1. Introduction
 
-Deleting a registry key analogically removes the headstone, not the body. The deleted entry disappears from Windows Regedit, the analyst's live view comes back clean, and to the untrained eye the evidence is seemingly gone. However, the data, in most cases, is still in the ground.
+### The Problem
 
-This matters because the registry is where attackers leave some of their most incriminating traces. Persistence mechanisms, malware configuration, and records of execution all pass through it. Threat actors respond by cleaning up: Via (2019) observed that advanced persistent threat actors frequently "utilize anti-forensic techniques to hide their tracks" from incident responders, and deleting registry artifacts is one of the cheapest such techniques available to them. A responder who only inspects the live registry will conclude there is nothing to find.
+When we talk about recovering Windows registry for the purpose of finding forensic artifacts, the setting is usually situated where a threat actor has already broken into a Windows machine. To make sure their code survives a reboot, the attackers add a startup entry to the Windows registry. Later, once their malicious objective is achieved, they perform some anti-forensic techniques to erase their traces. After several minutes, or days, depending how the defender's detection works, the defenders finally realised that something needs to be investigated either because of detection alert, or in a worst case scenario, the attacker has published the victim's stolen assets on dark web. For the later, it means that the published incident, ransom note, or leaked customer data on public *ironically becomes* the alert itself. Though this might sound exaggerated, the gap between break-in and discovery of an attack is not hypothetical as Mandiant's (2026) frontline data put the 2025 global median at 14 days; and that is the _median_, meaning half of the intrusions ran longer than 14 days after the initial breach to be detected. So at this point, when the incident responder arrives and opens the registry, the attacker has done many things: lateral movement, data exfiltration, setting up persistence, with nobody watching. They look at the registry startup list which looks completely normal, nothing suspicious, and no trace.
 
-The problem this article addresses is therefore twofold. First, defenders new to Windows forensics often do not understand *why* deleted registry data survives, or under what conditions it can be recovered. Second, there are premises which suggest that "recovering a deleted key" as a single act, when in fact recovering the data and recovering its original location are two different achievements with very different evidential value.
+Except the trace is actually still there. It just cannot be seen from the live registry.
 
-This article makes three contributions:
+Part 1 of this series attempts to address these questions from a digital forensic standpoint: When something is deleted from the Windows registry, is it actually gone, and if not, can a defender bring it back? More importantly, can a defender bring it back in a way that still proves *where* it was, because a recovered string or value on its own does not prove much at all.
 
-1. A beginner-friendly, analogical explanation of why deleted registry data persists, and what "slack" and "unallocated space" actually mean.
-2. A recovery exercise using free tools, reporting both a successful located recovery (validated against ground truth) and an honest account of where the author's live recovery failed.
-3. An updated assessment of the registry recovery sources documented in the 2019 FireEye research, identifying which remain viable on modern Windows and which are now historical.
+### The background story
 
-Section 2 provides the background and literature necessary to understand registry deletion. Section 3 states the threat model. Section 4 reviews the four recovery sources. Section 5 describes the methodology of the recovery exercise. Section 6 reports the results. Section 7 discusses their meaning and limitations. Sections 8 and 9 give recommendations and conclusions.
+The idea for this lab came from research published by FireEye (now Trellix), titled "Digging Up the Past: Windows Registry Forensics Revisited" (Via, 2019). That article documents several places where deleted registry data survives, including the registry's own transaction logs. For me as a beginner in the realm of digital forensic, it is an eye-opener research. However, I think that the research assumes the reader already knows how registry internals work, and it seems like it is written for practitioners rather than newcomers.
 
-## 2. Background
+Nevertheless, the motivation to restore registry artifacts is definitely not academic. As Via (2019) observed, advanced persistent threat actors frequently "utilize anti-forensic techniques to hide their tracks" from incident responders, and deleting a registry key is one of the cheapest such techniques available to them.
 
-### 2.1 Analogy: The registry as the building manager's logbook
+So this lab was built to answer a simpler question in a hands-on way: can a beginner, using only free tools, plant a fake attacker persistence entry, delete it, and then genuinely resurrect it from the hive file?
 
-The registry is the central configuration database of Windows. A useful way to picture it is as a building manager's logbook: every tenant (program), every key handed out (setting), and every scheduled maintenance job (autorun, service, scheduled task) gets written down. In this sense, the majority of programs running on Windows, although not entirely all of them, are highly dependent on the registry (Davis, 2026). The operating system consults it constantly, and so do forensic analysts, because it records what software was installed, what programs ran, what devices were connected, and what users did.
+The short answer is yes, but with conditions that took me a lot of failed attempts to discover. This first part shows the version that works, from start to finish, on Windows 7 Virtual Machine.
 
-On disk, the logbook is split into a small set of binary files called hives. According to Davis (2026), the system hives (DEFAULT, SYSTEM, SOFTWARE, SAM, SECURITY) live in `C:\Windows\System32\Config`, and each user has personal hives (NTUSER.DAT, UsrClass.dat) in their profile. In addition, the hive also hosts Amcache, which is an evidence of execution artifact. 
+### Why Windows 7
 
-Internally, a hive behaves like a miniature filesystem. It consists of a base block (a file header) followed by hive bins, and each bin contains cells, the units that actually store keys, values, and data (Suhanov, n.d.-a; Via, 2019). Those cells are the graves this article is about.
+There are two reasons Windows 7 is chosen. First, legacy systems are still out there in the field. In fact, I had a chance to work in one of my workplace environment where Windows 7 was used in a production for a while in 2025. So yeah, this is not a museum exercise. Second, and more practically, Windows 7 gave a clean, repeatable result. Modern Windows 11 behaves differently, and that comparison is the subject of Part 2.
 
-### 2.2 Memory versus disk: the lazy scribe analogy
+### What you will see in Part 1
 
-It is important to understand that Regedit does not show the hive files. It shows the live registry held in memory. The on-disk hive lags behind, because Windows does not write every change to the hive immediately. Davis (2026) complements this fact by describing the hardware hive as 'volatile' as it is built and loaded from the Boot Configuration Data (BCD), existing only in memory.
+In a nutshell, here is what I share in Part 1: 
 
-Instead, Windows uses a journaling scheme. Each hive is accompanied by transaction log files with the same name and a .LOG1 or .LOG2 extension. These LOG files are considered critical since there are many flights of registry data, values, and keys during system operation, which are not yet committed to the hive (Davis, 2026). As Suhanov's format specification describes it, before writing modified (dirty) data to a primary file, a hive writer stores that data in a transaction log file first, so that if a crash interrupts the write, the log contains enough data to bring the primary file back to a consistent state (Suhanov, n.d.-a). Think of a waiter taking orders: the change is jotted on the notepad (the log file) first, and entered into the till (the hive) later. A hive whose pending changes have not yet been written back is called a dirty hive.
+- What the registry actually is, in analogical narration and plain language
+- Why deleting something from it does not destroy it
+- Why rebooting before parsing Windows 7 image is an important step in this lab
+- The critical difference between recovering *data* and recovering *location*
+- A follow-along live lab: plant a persistence key, delete it, recover it with its full path intact
 
-The forensic value comes from a second property of the notepad: it is not erased after use. Since Windows 8.1, the log files operate as a ring buffer, meaning new entries are appended until the file fills, and only then does new data begin overwriting the oldest entries (Via, 2019). Recent registry history therefore accumulates in the logs, ordered by sequence numbers, until system activity eventually cycles it out. On real systems this window ranges from days to a few weeks, and registry-heavy events such as Windows Update shorten it considerably (Via, 2019).
+---
 
-### 2.3 What deletion actually does
+## 2. Basic Theoretical Backgrounds
 
-When a key or value is deleted, Windows does not shred it. The cells holding it are marked as unallocated, meaning available for reuse (Via, 2019; Suhanov, 2018). The analogy: someone tears the entry out of the book's table of contents but leaves the chapter printed inside. Until a new chapter is printed over those pages, the old text remains physically present, and a reader willing to flip through the "blank" pages can still find it. Thomassen's (2008) foundational study confirmed this experimentally, showing that "previously deleted or updated keys and their values indeed remain in the unallocated space until they become overwritten."
+### 2.1 What the registry is, in plain language
 
-Forensic tools do exactly that flipping. They scan a hive for unallocated cells and attempt to interpret the bytes as a key or a value; this is feasible because a key cell begins with the signature `nk` and a value cell begins with `vk`, so a scanner can recognise plausible structures in otherwise free space (Suhanov, 2018). When Via's (2019) team surveyed public methods, they found the common algorithm was to search all unallocated cells for deleted key cells, follow their references to deleted values, then sweep the remaining unallocated cells for orphaned value cells.
+Think of the Windows registry as a building manager's logbook. Every tenant (program), every key handed out (user's setting), and every scheduled maintenance job (startup entry, service, scheduled task) gets written down in it. Davis (2026) argues that the registry is so important that Windows reads this logbook constantly, and although not every program that runs on Windows has to use the registry, the majority of it, greatly depends on it. 
 
-> **What is "slack"?**
-> Storage is handed out in fixed-size chunks, but the data placed inside rarely fills the chunk exactly. The leftover, reserved-but-unused space is called *slack*. Like a shoebox that still has empty space around a smaller pair of shoes, slack is not scrubbed when reused, so it often still contains fragments of whatever was there before. In a hive this appears in two forms. *Unallocated cells* are fully freed cells holding deleted data (the shallow graves of this article). *Value slack* is the unused tail of a cell that is currently in use by a live value; because that tail is not wiped, it can still hold remnants of a previous, now-deleted value. Via's (2019) team specifically noted that existing tools could recover deleted elements "from slack space of allocated cells that had not yet been overwritten", that is, from the occupied graves, not just the empty ones.
+On disk, the logbook is not one file. In fact, there is no actual file path of registry logbook on disk. Rather, it is split into several binary files called **hives**, in which most of the main chunk of it is located on `%SystemRoot%`. By default, this is usually located at `C:\Windows\System32\config`.
 
-Two consequences follow. First, recovery is a race against reuse: the busier the hive, the sooner old cells are overwritten, and Thomassen (2008) likewise observed that recovered data "was frequently overwritten". This race has a hard deadline, because Windows periodically reorganises (defragments) a hive, compacting allocated data and discarding free space; per Suhanov's specification this reorganization happens roughly once a week when the hive is not locked (Suhanov, n.d.-a). Once reorganization runs, previously recoverable slack may be gone.
+![[Pasted image 20260731103456.png]]
+Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Windows Explorer at `C:\Windows\System32\config`
 
-Second, the slack survives best in the original on-disk hive, so acquisition method matters. Exporting a hive with `reg save` or `reg export` produces a re-serialised copy of the live registry that does not reliably preserve all recoverable slack. Testing by Suhanov (2020) found that a default export preserves most deleted data but not all: data beyond the last hive bin is not written to the exported file, so a small fraction of recoverable deleted keys and values (approximately 0.6% in his tests) is lost, while remaining present in the original hive. The safest practice, therefore, is raw acquisition of the hive file rather than an exported copy; this point returns in Section 5.
+| Hive                                        | Location                     | What it holds                      |
+| ------------------------------------------- | ---------------------------- | ---------------------------------- |
+| DEFAULT,<br>SYSTEM, SOFTWARE, SAM, SECURITY | `C:\Windows\System32\Config` | Machine-wide settings, credentials |
+| NTUSER.DAT                                  | Each user's profile folder   | That user's personal settings      |
+| UsrClass.dat                                | User profile (AppData)       | File associations, shell data      |
 
-### 2.4 Analogy of Associated versus unassociated recovery: does resurrection preserve the crime scene?
+On Windows machines, these Windows Registry files can be accessed from Registry Editor.
+![[Pasted image 20260731104224.png]]
+Figure 2: Type "reg" on search and look for "Registry Editor". These are called `Root registry keys`, and everything under this area is called a `subkey`. 
 
-Not all resurrections are equal. When a tool such as Registry Explorer carves deleted records from a hive, it sorts them into two categories, and the difference matters enormously for an investigation.
 
-According to Davis (2026), the underlying data of deleted registry key or value sits in allocated cell until Windows reuses that particular space for something new. The cell normally carries pointers linking it to related cells, including its parent key. As Carvey (2008) noted when describing the first tooling for this task, recovered key cells "have pointers to their parent keys (so that investigator can reassemble the full path of the key), timestamps... as well as pointers to their values." Those pointers tell the story *where* the deleted item lived. When an item is deleted, both its data and these pointers become candidates for reuse, but they are not always overwritten at the same time.
+| Registry Keys         | What it stores                                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HKEY_CLASSES_ROOT`   | Association of files extension with specific program to which it can open (for example, .pdf file is opened with Adobe Acrobat)                |
+| `HKEY_CURRENT USER`   | Implementation of registry with the current user that you're currently logged in as. It is made up of `NTUSER.DAT` and part of `UsrClass.dat`. |
+| `HKEY_LOCAL MACHINE`  | The important hives:`SAM, SECURITY, SOFTWARE, and SYSTEM`.                                                                                     |
+| `HKEY_USERS`          | Configuration of all active users on the system, including the `DEFAULT`file.                                                                  |
+| `HKEY_CURRENT_CONFIG` | The current hardware profile of the local computer system. It is stored in memory and rendered upon boot.                                      |
 
-**Associated deleted records** are those where the parent pointer survived. The tool can walk the pointer back and reconstruct the full path, so it can tell where the deleted value sat under, for example, `Software\Microsoft\Windows\CurrentVersion\Run`. In this way, both the body and its exact grave could be recovered because the full metadata exists (Davis, 2026).
+Internally, a hive behaves like a miniature filesystem. It begins with a base block (a file header), followed by hive bins, and each bin contains **cells**, which are the units that actually store keys, values, and data (Suhanov, n.d.-a; Via, 2019). Those cells are the focus of this article because they are where deleted data goes to hide. When a key or value is removed, its cell is not wiped, it is only marked as free, so the original bytes sit in place until something reuses that space.
 
-**Unassociated deleted values** are those where the data survived but the parent pointer did not. The value was recovered, but not where it lived. The body is on the table, but its grave is unmarked. Carvey (2008) made exactly this point about evidential weight: registry values recovered without a parent key or timestamp are "about as useful as finding some text in the pagefile or file slack."
+### 2.2 Regedit is lying to you (sort of)
 
-For a forensic investigation this distinction is the difference between evidence and trivia. A recovered value named `Updater` pointing to `C:\Users\Public\x.exe` is only incriminating if an investigator can show it was a Run key, that is, a persistence mechanism. As an unassociated orphan it proves only that the string once existed in the hive; whereas, as an associated record under a Run key, it proves an attacker installed persistence and then tried to remove it. To carry the article's metaphor: resurrecting a body is not enough. To reopen the case one must prove *this* body was buried *here*. Location is what turns a recovered value into a persistence artifact.
+Here is a detail that is important. When you open Regedit, you are **not** looking at the hive files on disk. Davis (2006) exemplifies that "the HARDWARE hive is volatile, built at boot, and exists only in memory". So in Regedit, you are looking at the live registry held in memory.
 
-Several factors decide which category a deletion falls into. Recent deletions are more likely to remain associated, because their pointers have not yet been overwritten. Older deletions on busy hives degrade toward unassociated orphans as surrounding cells are reused. How the deletion was performed also matters: deletions made through the Windows registry API tend to leave cleaner, more recoverable structures than direct manipulation of the hive file, a distinction the NIST reference dataset deliberately tests through separate deletion methods (National Institute of Standards and Technology, 2018). Where the parent pointer is gone, location can sometimes still be reconstructed from other sources, such as: the transaction logs which record the parent key path of each operation, the parent key's own last-write timestamp which can corroborate when a change occurred there, and a pre-deletion backup or shadow copy which contains the value still in place.
+The on-disk hive lags behind. Microsoft (n.d.) documents that the registry uses a **lazy flush** mechanism, writing modifications to disk at regular, system-specified intervals, and also flushing at system shutdown. Changes are visible to running programs instantly, but they reach the disk later. In other words, Windows does not write every change to the hive immediately.
 
-## 3. Threat Model
+Before writing dirty data to the primary hive file, the flush process first stores that data in a transaction log file, so that if a crash interrupts the write, the log holds enough information to bring the hive back to a consistent state (Suhanov, n.d.-a). These journal files sit right beside the hive, named `NTUSER.DAT.LOG1` and `NTUSER.DAT.LOG2`.
 
-### 3.1 Why attackers write to the registry
+![[Pasted image 20260803215518.png]]
+Figure 3: executing the command `dir /a` from `C:\Users\[your username]` on CMD reveals `NTUSER.DAT`, along with its corresponding `ntuser.dat.LOG1` and `ntuser.dat.LOG2`. 
 
-Before an attacker deletes anything from the registry, they put something there. The most common motive is persistence: surviving a reboot. Run keys, Windows services, and scheduled tasks all live in the registry, and all guarantee the attacker's code executes again after restart. MITRE ATT&CK catalogues these under T1547.001 (Registry Run Keys / Startup Folder) among others. The registry also serves as a hiding place. Fileless malware stores its configuration or even entire payloads inside registry values, avoiding the file system where antivirus looks hardest, a family of behaviours tracked under T1112 (Modify Registry). Finally, the registry holds treasure in its own right: the SAM and SECURITY hives contain local credential material that attackers extract for lateral movement.
+> **Analogy:** picture a waiter taking your order. They write it on a notepad first (the log file), then enter it into the till later (the hive). If the till crashes, the notepad still has your order.
 
-### 3.2 Why attackers delete
+The forensic value comes from a second property of the notepad as it is not erased after use. Since Windows 8.1, the log files operate as a ring buffer, meaning new entries are appended until the file fills, and only then does new data begin overwriting the oldest entries (Via, 2019). Recent registry history therefore accumulates in the logs, ordered by sequence numbers, until system activity eventually cycles it out. On real systems this window ranges from days to a few weeks, and registry-heavy events such as Windows Update shorten it considerably (Via, 2019).
 
-Every one of those writes is a confession waiting to be read. Once the objective is achieved, the mission shifts to leaving quietly. Removing the Run key, deleting the service entry, and clearing the traces of execution all fall under ATT&CK T1070 (Indicator Removal). The goal is simple: when the incident responder arrives and opens the logbook, the pages should look untouched, and the timeline of the intrusion should have holes exactly where the attacker stood.
+### 2.3 Why you must reboot: an important step in this lab
 
-### 3.3 Why defenders resurrect
+This section exists because skipping this step is what caused this lab to fail repeatedly before it finally worked. 
 
-A recovered registry artifact answers the questions that drive every investigation: what ran, when, and under which account. A resurrected Run key value proves persistence existed even after the attacker cleaned it. Its timestamps anchor the intrusion timeline. Its payload path tells the analyst where to look next on the file system.
+#### The core problem
 
-Just as importantly, a recovered artifact is rarely conclusive alone. It is just one witness, and witnesses must be corroborated to see if they tell the same story. A resurrected registry entry gains its evidential weight when event logs, file system metadata, and network records tell the same story, which is the same multi-source corroboration discipline that governs digital forensics generally. Recovery, in other words, is not the end of the investigation. It is what reopens it.
+You already know from the previous section that Windows does not write registry changes to disk immediately. It uses a lazy flush (Microsoft, n.d.). Now think about what that means for our experiment.
 
-## 4. Recovery Sources: The Analogy of Four Graves
+If you **create** a value and then **delete** it a minute later, both actions happen in memory. Windows has not necessarily written either one to disk yet. So when the flush finally happens, what does it write?
 
-If deleted registry data is a body, then Windows maintains four kinds of grave, and each demands a different kind of digging. The unallocated cells inside the hive are shallow graves: easy to reach, but easily disturbed. The transaction logs are the coroner's notes: a reliable record of recent deaths. The transactional registry is a niche archive: rarely consulted, occasionally priceless, and now largely sealed. The backups are body doubles: full copies frozen in time, if anyone remembered to make them. This section reviews each, including whether it still works on Windows 10 and 11.
+It writes the **end state**. And the end state is "this value does not exist."
 
-### 4.1 Unallocated cells in the hive (the shallow graves)
+The value was born and died entirely in memory. The hive on disk never once contained it. There is no deleted cell, no leftover data, nothing to carve back. 
 
-**Mechanism.** As described in Section 2.3, deletion marks cells as unallocated without wiping them, and tools carve them back by scanning for `nk` and `vk` structures (Suhanov, 2018). Whether a recovery is associated or unassociated depends on whether the parent pointer also survived (Section 2.4).
+> **Analogy: the whiteboard and the filing cabinet.**
+>
+> Imagine an office where staff write notes on a whiteboard during the day (memory), and at the end of the day someone copies the whiteboard into the permanent filing cabinet (the hive on disk).
+>
+> Now suppose you write a note "Meeting with Bob, 3pm" on the whiteboard at 10am, then erase it out at 10:15am. When the clerk copies the whiteboard into the cabinet that evening, what do they file? Nothing about Bob. That note never made it into the cabinet at all.
+>
+> A forensic analyst who later digs through the filing cabinet, and even through the thrash bin beside it, will find no trace of Bob. Not because the evidence was destroyed, but because it was never committed in the first place.
 
-**Tooling.** Eric Zimmerman's Registry Explorer performs this scan automatically and displays recovered entries in red, separating them into associated and unassociated nodes. On the command line, Suhanov's yarp offers `yarp-print --deleted`, which Carvey (2019) documents as an accurate approach for parsing deleted keys and values. The Python library regipy provides the same capability programmatically (Fortuna, 2021).
+This is exactly what happened in the early attempts at this lab, and it produced a confusing result: the recovery tool found nothing, even though the value had definitely been created and definitely been deleted.
 
-**A Caveat.** Not everything recovered is trustworthy. Cells are recycled constantly, and when a cell has been reused, tools can attach orphaned data to the wrong parent. Via (2019) found that in such cases existing tools "will make incorrect deleted value associations and output invalid data." Recovered entries are leads to corroborate, never conclusions.
+#### The fix
 
-**Viability on Windows 10/11.** Fully alive on every Windows version, and the fastest technique to apply.
+**Reboot between creating the artifact and deleting it.**
 
-### 4.2 Registry transaction logs (the coroner's notes)
+A restart forces Windows to flush the registry to disk, because the flush happens at system shutdown (Microsoft, n.d.). After the reboot, the key genuinely exists inside the on-disk hive file, as a real allocated cell.
 
-![transactionallog12](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/transactionallog12.png)
+Now when you delete it, that cell is marked unallocated, and its data stays there until something overwrites it  (Via, 2019; Suhanov, 2018). At this point, there is finally something to recover.
 
-*Figure 1. Transactional logs (.LOG1 and .LOG2) for NTUSER.DAT viewed from powershell*
+> **Back to the analogy:** write the note on the whiteboard, let the clerk file it that evening, and *then* go into the cabinet tomorrow and pull the note out and shred it. Now the trash bin has something in it. Now there is a trace.
 
-**Mechanism.** Every registry write is journaled to the hive's .LOG1/.LOG2 files before being committed (Section 2.2). Because the logs are a ring buffer, they retain a rolling window of recent registry history, ordered by sequence number.
+#### Why a clean shutdown at the end matters too
 
-**What it recovers.** Recent creations, modifications, and deletions, including the state of values before they changed. This produces the most striking finding of the FireEye research: an attacker who overwrites a value before deleting it defeats slack-space recovery, since the original cell content is gone from the hive, yet the original write may still sit in the log. In Via's (2019) experiment, existing tools could not recover the overwritten value, "but the data was still present in the transaction log." Crucially for Section 2.4, the log records the parent key path of each operation, so log replay can restore not only just the value, but also where it lived.
+The same principle applies at the other end of the experiment.
 
-**Recovery window.** Days to weeks, depending on system activity, with registry-heavy events such as Windows Update aggressively cycling the buffer (Via, 2019).
+After deleting the key, the deletion itself is also sitting in memory. If you shut down the power on the virtual machine, or acquire the hive while the system is busily working, you risk two problems: the deletion may not have been committed properly, and the freed cell may already have been reused by ongoing system activity.
 
-**Tooling.** Registry Explorer detects a dirty hive on load and offers to replay the logs. Eric Zimmerman's rla.exe and Suhanov's yarp perform the merge standalone. A well-known pitfall: RegRipper does not process transaction logs automatically, so hives must be merged first (Carvey, 2019).
+Shutting the machine down cleanly does two useful things at once. It flushes the deletion into the hive, and then it **stops all activity**, which means nothing can reuse the freed cell. The evidence freezes in place.
 
-**Viability on Windows 10/11.** Fully alive, and today the primary recovery technique. Collection playbooks must acquire the .LOG1/.LOG2 files alongside every hive; a hive without its logs is a book missing its most recent chapter.
+> **Analogy:** the thrashed note is now sitting in the thrash bin. If the office keeps running, someone will empty that bin or pile new thrashes on top of it. However, if you lock the office and go home, the bin stays exactly as it is until you come back to recover the thrash.
 
-### 4.3 The transactional registry (the niche archive)
+#### Why this matters beyond the lab
 
-**Mechanism.** Separate from the crash-resilience logs above, Windows Vista introduced the transactional registry, a feature that lets a program accumulate multiple modifications within a transaction that can be committed or rolled back as a single unit, like a database transaction (Suhanov, n.d.-a). These transactions are journaled in their own .TxR log files.
+This is not just a lab technicality. It explains something real about incident response. Whether a deleted registry artifact is recoverable depends heavily on **timing and system activity**, not just on whether the deletion happened. Thomassen (2008) observed that recovered data "was frequently overwritten," and Via (2019) found that registry-heavy activity such as Windows Update sharply shortens the window in which deleted data survives.
 
-**What it recovered.** On Windows Vista through 8.1, the Task Scheduler used registry transactions when creating and deleting scheduled tasks. Parsing the .TxR logs could therefore reveal attacker-created scheduled tasks that had been deleted and were recoverable nowhere else (Via, 2019).
+The practical consequence is to acquire early. A hive collected shortly after a suspected deletion is far more likely to yield a recovery than one collected days later.
 
-**Viability on Windows 10/11.** Dead. Via (2019) confirmed that the Task Scheduler on Windows 10 no longer exhibits the transactional behaviour, so the technique is presented here as forensic history. It remains instructive because the pattern, a secondary journal capturing what the primary record lost, is exactly what keeps the other graves productive.
+### 2.4 Understanding the commands, line by line
 
-### 4.4 Backups: RegBack and System Restore (the body doubles)
+Before running anything, it helps to actually understand what these commands do. Here is the first one, taken apart.
 
-**Mechanism.** Two Windows features historically kept full copies of the hives. The RegIdleBackup is a scheduled task that run copied the system hives to `C:\Windows\System32\Config\RegBack` every ten days (Davis, 2026). Separately, System Restore points, created automatically around software installs and uninstalls, capture complete hive sets inside Volume Shadow Copies (Via, 2019).
+```
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo" /v Payload /t REG_SZ /d "C:\Users\regdemo\payload.exe" /f
+```
 
-**What it recovers.** Entire historical hives. Because a backup contains the target key with the value still in place, it is the one source that recovers a deleted value with its full location every time, no carving required.
+| Part | What it means |
+|---|---|
+| `reg add` | The built-in Windows command for adding registry keys and values |
+| `HKCU\...` | Where to put it. See breakdown below |
+| `/v Payload` | The **v**alue name to create, here called `Payload` |
+| `/t REG_SZ` | The value **t**ype. `REG_SZ` simply means a plain text string |
+| `/d "C:\..."` | The **d**ata to store inside that value |
+| `/f` | **F**orce. Do not stop and ask "are you sure?" |
 
-**Viability on Windows 10/11.** Degraded to configuration-dependent. Since Windows 10 version 1803, RegIdleBackup still runs but writes nothing, leaving zero-byte files, a deliberate Microsoft change to save disk space (Microsoft, 2019). On a default modern installation, this grave is empty. System Restore is frequently disabled, and ransomware operators routinely destroy shadow copies before detonation precisely to burn these body doubles. The backup can be revived by setting the `EnablePeriodicBackup` value under `HKLM\System\CurrentControlSet\Control\Session Manager\Configuration Manager`.
+**Reading the path:**
 
-### 4.5 Summary of viability
+```
+HKCU \ Software \ Microsoft \ Windows \ CurrentVersion \ Run \ ResurrectionDemo
+ (1)                    (2)                              (3)        (4)
+```
 
-| Recovery source | Metaphor | Windows 7/8.1 | Windows 10/11 (default) |
-|---|---|---|---|
-| Unallocated hive cells | Shallow graves | Alive | Alive |
-| Transaction logs (.LOG1/.LOG2) | Coroner's notes | Alive | Alive, primary technique |
-| Transactional registry (.TxR) | Niche archive | Alive (Vista to 8.1) | Dead |
-| RegBack backups | Body doubles | Alive | Empty by default |
-| System Restore / VSS hives | Body doubles | Configuration-dependent | Configuration-dependent |
+1. **HKCU** is short for `HKEY_CURRENT_USER`, meaning the settings belonging to the user who is currently signed in. Physically, this lives in that user's `NTUSER.DAT` hive file.
+2. The middle section is folder structure inside the registry, the same way `Documents\Work\2026` is folder structure on a disk.
+3. **Run** is the important one. Anything placed in this key gets executed automatically every time that user logs in. It is a startup list commonly used for persistence by threat actor.
+4. **ResurrectionDemo** is the new key we are creating inside that startup list.
 
-## 5. Methodology
+#### The story the commands tell
 
-The recovery exercise had two aims: to demonstrate the concept of an attacker planting and deleting a persistence artifact, and to demonstrate recovery of deleted registry records, including the distinction between recovering data and recovering location.
+Read as a narrative, the two commands play the part of an attacker who has just gained access and wants to stay:
 
-**Concept lab (Sections 6.1 to 6.2).** A disposable local user account was created on a Windows 11 virtual machine. Using this account, a string value named `ResurrectionDemo` was created under `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`, pointing to a non-existent path (`C:\Users\demo\payload.exe`). This mimics the most common attacker persistence technique (ATT&CK T1547.001) while ensuring nothing executed. The value was then deleted through Regedit to simulate an attacker removing their persistence.
+**Command 1: install the persistence.**
+```
+reg add "HKCU\...\Run\ResurrectionDemo" /v Payload /t REG_SZ /d "C:\Users\regdemo\payload.exe" /f
+```
+"Create a startup entry called `ResurrectionDemo`, and inside it record that `payload.exe` should run at every logon." This is the classic persistence move, catalogued by MITRE ATT&CK as T1547.001, Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder (MITRE, n.d.-a).
 
-**Acquisition.** Hives were collected with KAPE (Kroll Artifact Parser and Extractor) using the `RegistryHivesUser` target, which copies each user hive together with its .LOG1/.LOG2 transaction logs. Raw acquisition was chosen over `reg save`/`reg export` because, as established in Section 2.3, exported copies do not reliably preserve all recoverable slack (Suhanov, 2020).
+**Command 2: store the configuration.**
+```
+reg add "HKCU\...\Run\ResurrectionDemo" /v Config /t REG_SZ /d "C2=192.168.1.50" /f
+```
+"While I am here, also store my command and control server address inside the same key." Real malware does this routinely, keeping its settings in the registry rather than in a file on disk where antivirus is more likely to look. MITRE tracks this behaviour as T1112, Modify Registry (MITRE, n.d.-b).
 
-**Analysis.** Collected hives were loaded into Eric Zimmerman's Registry Explorer with deleted-record recovery enabled. Where a hive was dirty, its transaction logs were replayed against a working copy while the originals were preserved and hashed.
+So by the end of two commands, the attacker has both a persistence mechanism and a stored configuration, all inside one registry key. That key is the body we are going to plant and later "resurrect".
 
-**Validation dataset.** To demonstrate located (associated) recovery against known ground truth, the exercise used the NIST CFReDS reference dataset cfreds-2017-winreg, which publishes hives containing deliberately deleted keys at documented locations, together with a technical report specifying exactly what was deleted and where (National Institute of Standards and Technology, 2018).
+#### Explanation of the Two deliberate choices
 
-This is a teaching reconstruction, not an evidence-handling procedure. In a real investigation the disk would be imaged and all analysis performed on verified, hashed copies.
+**The payload path does not exist.** There is no file at `C:\Users\regdemo\payload.exe`, and this is intentional. At logon, Windows reads the Run key, tries to launch the file, fails silently, and moves on. Nothing executes, and antivirus has no binary to quarantine. Crucially, the registry does not care whether the target file exists, it stores the string either way, so the artifact left behind is structurally identical to a real one. It is the forensic equivalent of using a mannequin during crime reenactment instead of a real body: same outline at the scene, nobody actually harmed.
 
-## 6. Results
+**A key was created, not just a value.** This looks like a small detail. It turns out to be the single most important decision in the entire lab, and Section 2.7 explains why.
 
-The results are presented as four acts: burying a body, watching it disappear, resurrecting it, and checking the one grave that proved empty.
+The deletion command later is the mirror image:
 
-### 6.1 Act 1: Bury the body
+```
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo" /f
+```
 
-The value `ResurrectionDemo` was created in the Run key of the disposable account's NTUSER.DAT hive, pointing to a non-existent payload path.
+"Remove that entire key, including everything inside it, without asking me to confirm." This is the attacker cleaning up, which MITRE catalogues as T1070, Indicator Removal (MITRE, n.d.-c).
 
-![Planting RessurectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted1.png)
-*Figure 2. The planted `ResurrectionDemo` value in the Run key, viewed in Regedit.*
+### 2.5 What deletion actually does
 
-### 6.2 Act 2: The murder
+This is the heart of it.
 
-The value was deleted through Regedit. To a responder inspecting the live registry afterwards, the Run key appeared clean and the persistence appeared never to have existed.
+When you delete a registry key or value, Windows does **not** erase the bytes. The cells holding it are simply marked as **unallocated**, meaning available for reuse (Via, 2019; Suhanov, 2018).
 
-![Deleting ResurrectionDemo](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/planted2.png)
-*Figure 3. The same Run key after deletion. The persistence value is absent from the live view.*
+> **Analogy:** somebody tears the entry out of a book's table of contents, but leaves the chapter itself printed inside. Until a new chapter gets printed over those pages, the old text is still physically there. Anyone willing to flip through the "blank" pages can still read it.
 
-### 6.3 Act 3a: Unassociated recovery, the body without the grave
+Thomassen (2008) proved this experimentally, showing that "previously deleted or updated keys and their values indeed remain in the unallocated space until they become overwritten."
 
-After repeating Act 1 and Act 2, the author reconstructed deleted keys recovery using KAPE and Registry Explorer in repetitious attempts, and yielded different results as shown below:
+Forensic tools do exactly that flipping. As Suhanov (2018) describes, they scan a registry file for unallocated cells and then attempt to interpret the data as a key or a value, which is feasible because a key cell begins with the signature `nk` and a value cell begins with `vk`.
 
-#### 6.3.3a.1 : Deleted key was captured too late
+In this sense, it is suffice to say that recovery is a race. The busier the hive, the sooner those free cells get reused. Thomassen (2008) likewise found that recovered data "was frequently overwritten." There is even a hard deadline, since Windows periodically reorganises and compacts a hive, discarding free space; per Suhanov (n.d.-a) this reorganization happens roughly once a week when the hive is not locked.
 
-![Figure1](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo1.png)
-*Figure 4. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The hive got a dirty capture (the replay ran, deleted records were recovered), but the deletion captured in the log was an unrelated value (`InstallState`) rather than the planted `ResurrectionDemo`, indicating the planted deletion had already been flushed and its cell reused due to registry-heavy activity (Via, 2019).*
+#### A quick word on "slack"
 
-#### 6.3.3a.2 : Deleted keys was captured too fast
+You will see the term *slack* used constantly in forensics, so here it is in plain terms.
 
-![Figure2](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo2.png)
-*Figure 5. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. The recovered value is `New Value #1`, RegSz, with **empty data**. The value name is what regedit assigns a string value the instant a key was created, before it got rename into 'ResurrectionDemo' (Honeycutt, 2005). So what got captured and recovered is the value at a moment when it existed but had not been named `ResurrectionDemo` or given its data yet.*
+Storage is handed out in fixed-size chunks, but the data placed inside rarely fills the chunk exactly. That leftover, reserved-but-unused space is called slack.
 
-#### 6.3.3a.3 : Reboot after deleted the `ResurrectionDemo` key and captured using kape.exe (CLI) 
+> **Analogy:** a shoebox holding a smaller pair of shoes. There is empty space around them. Nobody scrubs that space when the box is reused, so fragments of whatever was in there before can still be lying around.
 
-![kapecli.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/kapecli.png)
-*Figure 6. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE CLI. The summary confirms successful carving: **Copied 23 (Deduplicated: 1) out of 24 files in 5.4268 seconds.** The NTUSER.DAT, both its LOG files, plus DEFAULT, usrClass.dat, and their logs were collected.*
+In a hive this shows up in two ways:
 
-Loading the author's own collected NTUSER.DAT into Registry Explorer, with deleted-record recovery enabled, returned 103 recovered deleted values. All appeared under the Unassociated deleted values node: the data survived, but the parent pointers had been overwritten by prolonged normal system use, so the tool recovered what these values were but not where they had lived.
+- **Unallocated cells:** fully freed cells still holding deleted data. 
+- **Value slack:** the unused tail of a cell that is currently in use. Because that tail is not wiped, it can still hold remnants of a previous, now-deleted value. Via's (2019) team specifically noted that tools could recover deleted elements "from slack space of allocated cells that had not yet been overwritten."
 
-![figure3](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/figure%20demo%203.png)
-*Figure 7. Recovered deleted values from a live NTUSER.DAT hive collected with KAPE. Each red row is a deleted value carved from unallocated space, but all are unassociated: orphaned data recovered without original registry path, and the 'ResurrectionDemo' key was not captured in Associated Deleted Records. However, Registry Explorer displayed recovered deleted values `ULSAllCategories`, `state`, `LastModified`, `ItemKey`, each flagged as deleted. The selected one (`ULSAllCategories`, RegSz) even shows its recovered data and raw value in the Type viewer at bottom right.*
-### 6.4 Act 3b: Associated recovery, the body in its grave, validated
+### 2.6 The most important concept: body versus grave
 
-The recovery was repeated against a NIST reference hive. The hive `[nrd]-01-1_delete-keys-with-values-but-without-subkeys` was loaded; NIST's technical report documents that two keys were deleted from it via the Windows registry API: `ROOT\0x01_TYPE1_DATA-TYPES` and `ROOT\0x06_TYPE1_BIG-DATA`. Registry Explorer recovered both and placed them under the Associated deleted records node with their full ROOT path reconstructed. The recovered keys matched NIST's documented ground truth.
+This is the part that separates a useful recovery from a least important one.
 
-![nist registry 1.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/nist%20registry.png)
-*Figure 8. Registry Explorer recovering deleted keys from the NIST CFReDS cfreds-2017-winreg reference hive. The keys `0x01_TYPE1_DATA-TYPES` and `0x06_TYPE1_BIG-DATA` appear as associated deleted records with their full ROOT path intact, matching NIST's documented ground-truth deletions.*
+When a recovery tool carves deleted records out of a hive, it sorts them into two buckets.
 
-### 6.5 Act 4: The empty grave
+**Associated deleted records.** The deleted item still has its pointer back to its parent key. As Carvey (2008) described when the first tooling for this appeared, recovered key cells "have pointers to their parent keys (so that you can reassemble the full path of the key), timestamps... as well as pointers to their values." The tool can walk that pointer and rebuild the full path. Doing so means you recover **both the body and the grave**.
 
-Inspecting `C:\Windows\System32\Config\RegBack` on the Windows 11 host returned zero files and zero bytes.
+**Unassociated deleted values.** The data survived, but the pointer to the parent key did not. You know *what* the item was, but not *where* it lived. The body is on the table, but the grave is unknown.
 
-![Regback](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/regback.png)
+Why does this matter so much? Consider a recovered value called `Updater` pointing to `C:\Users\Public\x.exe`.
 
-*Figure 9. The RegBack directory on Windows 11, showing 0 files and 0 bytes.*
+- As an **unassociated** orphan, it proves only that this text once existed somewhere in the hive. Carvey (2008) put it bluntly: registry values recovered without a parent key or timestamp are "about as useful as finding some text in the pagefile or file slack."
+- As an **associated** record sitting under a **Run key**, it proves an attacker installed a persistence mechanism and then tried to remove it. That is evidence.
 
-## 7. Discussion
+> To put it another way: resurrecting a body is not enough. To reopen the case, you have to prove *this* body was buried *here*.
 
-### 7.1 Recovering data versus recovering the crime scene
+### 2.7 The finding that made it work
 
-Read together, Figures 4, 5, and 8 make the central technical point of this article visible. All those recoveries resurrected deleted data, yet only figure 8 recovered the crime scene: the location that turns a recovered value into evidence of where an attacker acted. This is the practical consequence of the associated/unassociated distinction set out in Section 2.4, and it aligns with Carvey's (2008) observation that a recovered value without a parent key is of little evidential use on its own. For an incident responder, the lesson is that a successful carve is not automatically a useful finding; the value's original location must be established, whether directly through an associated record, or indirectly through transaction logs, parent-key timestamps, or a backup.
+Earlier attempts at this lab kept producing **unassociated** results: the data came back, but never the path. Two separate tools, Registry Explorer and Suhanov's yarp, independently confirmed the same disappointing outcome. (Using two tools was itself deliberate, since Suhanov (2018) has documented that different tools do not recover deleted registry data the same way.)
 
-### 7.2 The recovery window on Windows 11: an honest negative result
+The reason turned out to be structural, and it is genuinely useful to know:
 
-A finding emerged during this exercise that is worth reporting because it contradicts how introductory tutorials usually present the technique. Repeated attempts to recover the specific `ResurrectionDemo` value from live systems, as an associated record with its Run-key path intact, were unsuccessful. On modern Windows 11 the registry is flushed to disk aggressively and freed cells are reused quickly, especially while Windows Update is active, which was observed to collapse the recovery window and reassign the freed cell before acquisition completed. In several captures, the only recoverable deletions were unrelated background operations rather than the planted value, and the author's live hives yielded only unassociated recoveries. This is consistent both with Via's (2019) finding that registry-heavy activity sharply shortens the transaction-log recovery window, and with the reorganization behaviour documented by Suhanov (n.d.-a), whereby hives are periodically compacted and free space discarded. For this reason, located recovery was demonstrated against the NIST reference dataset, where the deletions are documented and the ground truth is known, rather than against a self-planted value. The lessons learned from this negative result characterises a real operational constraint: on a live, busy system, the time window in which a specific deletion remains recoverable with its location could be either extremely short, or must be done within a certain running environment.
+> **Deleting a value from a key that stays alive is not the same as deleting the key itself.**
 
-### 7.3 Comparison with prior work
+When you delete a *value* under a Run key that continues to exist, the Run key is never deleted. It is still allocated and healthy, and it simply stops referencing your value. There is no deleted parent key for that orphaned value to associate with, so the recovery almost always comes back unassociated.
 
-The recovery mechanism demonstrated here rests on findings established over more than a decade. Thomassen (2008) first showed experimentally that deleted keys and values persist in unallocated space until overwritten. Morgan (2008) and Suhanov (2018) formalised the carving algorithms and documented how different tools vary in correctness. Via (2019) extended recovery to the transaction logs and demonstrated recovery of overwritten values that slack-space carving alone cannot reach. This article does not add to that primary research; its contribution is to make the concepts accessible to newcomers, to demonstrate them with current free tooling such as KAPE and Registry Explorer, to validate a located recovery against NIST ground truth, and to report honestly the conditions under which live recovery fails.
+When you delete an entire *key*, the deleted `nk` cell still carries its parent pointer (Carvey, 2008). That pointer is what lets a tool rebuild the path.
 
-### 7.4 Limitations
+This is also realistic from a threat perspective. Plenty of real persistence is key-based, not value-based: a malicious service under `HKLM\SYSTEM\CurrentControlSet\Services\`, or a registered scheduled task, is a whole key with values inside it.
 
-This exercise has several limitations that readers should keep in mind:
+**Practical takeaway for responders:** if you recover an orphaned value with no path, that does not automatically mean the evidence is weak or the tool failed. It may simply reflect what the attacker deleted. 
 
-- **Single artifact type on a virtual machine.** 
+### 2.8 The lab, start to finish
 
-  The author tested one specific type of registry entry, not the full range an attacker might use (services, scheduled tasks, and so on). And it was conducted on a live practice machine, whereas a real investigation would first make a forensic copy of the disk and work only on that copy. This is because the article is intended as a teaching setup, not a courtroom-grade procedure.
-- **Recovery is timing-dependent and never guaranteed.** 
+**Environment:**
 
-  By theory, a deleted entry survives only until Windows reuses that space for something else. This means that on a busy system that can happen in seconds. Thus, the premise of "you can always recover it" is false; sometimes the recovery attempts are simply too late, and there is no way to guarantee success in advance as the author experienced in this exercise.
-- **The overwritten-value recovery was not reproduced.** 
+- Windows 7 SP1 virtual machine (VirtualBox), kept offline
+- A throwaway local user account named `regdemo`
+- FTK Imager for acquisition and Eric Zimmerman's Registry Explorer for analysis, both free
 
-  One powerful technique from the source research (pulling back a value even after it was written over, by reading the change journal) is described here on the authority of Via's (2019) research. Since the author of this article did not perform it personally, it is presented as a citation.
-- **The transactional registry findings are historical.** 
+#### Step 1: Bury the body
 
-  Considering that one of the four recovery sources mentioned in Section 4, which is .TxR transactional-registry technique, applies only to Windows Vista through 8.1 and no longer works on Windows 10 or 11, it is then effectively obsolete on modern Windows. It is included for completeness and because older systems still exist out there; however, it is not expected to work on a current or modern machine.
-- **Located recovery used sampled NIST test keys, not a live persistence value.** 
+Signed in as `regdemo`, the persistence key was created using the two commands broken down in Section 2.4.
+![[Pasted image 20260803224110.png]]
+*Figure 4. The persistence key created successfully under the Run key.*
 
-  Through presentation of secondary data, the author proved that recovery can preserve an item's original location (the associated deleted records), but it was done using NIST's ready-made test data (where the "right answer" is documented) rather than using own planted value (ResurrectionDemo Value). This is because live modern Windows 11 kept flushing the planted value before the author could capture it. The capability is real; the specific example is a reference dataset.
-- **Recovered data always needs expert interpretation and corroboration.** 
+#### Step 2: Force it onto disk
 
-  As quoted from Via (2019), deleted entries can be misassociated or corrupted when cells are reused. This means that carving tools sometimes attach recovered data to the wrong place or return garbage. A recovered binary or entry only points where to look next; it does not settle the case on its own. It is imperative that investigators must corroborate it against other evidences such as event logs, file timestamps, and network records before drawing conclusions.
+The virtual machine was **restarted**, for all the reasons set out in Section 2.3. Without this, the key would never have reached the hive file and there would have been nothing to recover.
 
-## 8. Recommendations for Defenders
+#### Step 3: The murder
 
-- Collect hives together with their .LOG1 and .LOG2 files in every triage playbook. A hive without its logs is missing its most recent history.
-- Acquire hive files raw (KAPE, FTK Imager). Do not rely on `reg export` output for forensic work, as it does not preserve all recoverable slack (Suhanov, 2020).
-- Acquire early. The recovery window on a live system is narrow and shrinks with system activity; the sooner a hive is collected after a suspected deletion, the more likely the recovery preserves location.
-- Re-enable periodic registry backups via the `EnablePeriodicBackup` value on endpoints you defend, and preserve Volume Shadow Copies before anything else touches the disk.
-- Treat a dirty hive as normal, not suspicious, and treat every recovered artifact as a lead requiring corroboration, not a conclusion.
+Signed back in as `regdemo`, the entire key was deleted:
 
-## 9. Conclusion
+```
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo" /f
+```
 
-The premise of registry anti-forensics is that deletion equals destruction. This article showed the premise is false. Windows marks deleted cells as unallocated rather than wiping them, journals every write to a transaction log before committing it, and, where properly configured, keeps whole copies of its hives. Each behaviour exists for reliability, not forensics, yet each leaves a trail that outlives the attacker's cleanup.
+Opening Regedit afterwards, the Run key looks completely clean. To a responder inspecting the live registry, this persistence never existed.
+![[Pasted image 20260803224214.png]]
+*Figure 5. The Run key after deletion. Nothing to see in Regedit.*
 
-But resurrection is not one act, it is two. Recovering the data proves something existed; recovering its location proves where it existed, and location is what turns a recovered value into evidence. The exercise showed both phases of this: an orphaned recovery that returned data without its grave, and a validated recovery that returned deleted keys in their documented place. It also showed, honestly, that on a live modern Windows 11 system, the located recovery is far from guaranteed because the registry flushes and reuses freed space faster than most guides admit.
+The virtual machine was then shut down cleanly, freezing the freed cell in place.
 
-For the defender, the lesson is one of habit rather than heroics. Acquire hives with their logs, acquire early, work on hashed copies, know which sources are alive on modern Windows and which graves are empty by design, and corroborate everything recovered. The registry keeps its own receipts. The author concludes that although deletion by threat actors removes the headstone, but for an analyst who knows where to dig, the body is usually still in the ground.
+#### Step 4: Acquire the evidence using FTK Imager
 
-## References
+The three files we need all live in the `regdemo` user's profile: the hive itself, `NTUSER.DAT`, and its two transaction logs, `NTUSER.DAT.LOG1` and `NTUSER.DAT.LOG2`. 
 
-- Carvey, H. (2008). *Deleted Keys in the Registry*. Windows Incident Response. http://windowsir.blogspot.com/2008/07/deleted-keys-in-registry.html
-- Carvey, H. (2019). *Registry Transaction Logs, pt II*. Windows Incident Response. http://windowsir.blogspot.com/2019/04/registry-transaction-logs-pt-ii.html
-- Fortuna, A. (2021). *Windows registry Transaction Logs in forensic analysis*. https://andreafortuna.org/2021/02/06/windows-registry-transaction-logs-in-forensic-analysis/
-- Honeycutt, J. (2005). *Microsoft Windows Registry Guide_ (2nd ed.). Microsoft Press. (See "Editing the Registry": Regedit names new values `New Value #N`.)*. https://dokumen.pub/microsoft-windows-registry-guide-2-ed.html
-- Microsoft. (2019). *The system registry is no longer backed up to the RegBack folder starting in Windows 10 version 1803*. https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/system-registry-no-backed-up-regback-folder
-- MITRE ATT&CK. *T1547.001: Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder*. https://attack.mitre.org/techniques/T1547/001/
-- MITRE ATT&CK. *T1112: Modify Registry*. https://attack.mitre.org/techniques/T1112/
-- MITRE ATT&CK. *T1070: Indicator Removal*. https://attack.mitre.org/techniques/T1070/
-- Morgan, T. D. (2008). *Recovering deleted data from the Windows registry*. Digital Investigation, 5, S33-S41. https://www.sciencedirect.com/science/article/pii/S1742287608000303
-- National Institute of Standards and Technology. (2018). *CFReDS: A Windows Registry Dataset (cfreds-2017-winreg)*. https://cfreds-archive.nist.gov/winreg/cfreds-2017-winreg/cfreds-2017-winreg.html
-- National Institute of Standards and Technology. (2018). *cfreds-2017-winreg Technical Report (v1.10)*. https://cfreds-archive.nist.gov/winreg/cfreds-2017-winreg/cfreds-2017-winreg.pdf
-- Rathbun, A. *Registry Explorer / RECmd guide*. AboutDFIR. https://aboutdfir.com/toolsandartifacts/windows/registry-explorer-recmd/
-- Suhanov, M. (2018). *Tools that recover deleted registry data don't do the same job*. dfir.ru. https://dfir.ru/2018/11/18/tools-that-recover-deleted-registry-data-dont-do-the-same-job/
-- Suhanov, M. (n.d.-a). *Windows registry file format specification*. GitHub. https://github.com/msuhanov/regf/blob/master/Windows%20registry%20file%20format%20specification.md
-- Suhanov, M. (n.d.-b). *yarp: yet another registry parser*. GitHub. https://github.com/msuhanov/yarp
-- Thomassen, J. (2008). *Forensic Analysis of Unallocated Space in Windows Registry Hive Files* (Master's thesis, University of Liverpool). https://sentinelchicken.com/research/thomassen_registry_unallocated_space/
-- Via, D. (2019). *Digging Up the Past: Windows Registry Forensics Revisited*. FireEye Threat Research (republished by Trellix). https://www.trellix.com/en-au/blogs/research/digging-up-the-past-windows-registry-forensics-revisited/
-- Zimmerman, E. *Registry Explorer / RECmd / rla*. Eric Zimmerman's Tools. https://ericzimmerman.github.io/
-- Kroll. *KAPE (Kroll Artifact Parser and Extractor)*. https://www.kroll.com/en/services/cyber/incident-response-litigation-support/kroll-artifact-parser-extractor-kape
+With the VM shut down, work through the following.
+
+1. **Add the virtual disk as evidence.** Open FTK Imager and go to `File > Add Evidence Item`. In the Select Source window, choose **Image File**, click Next, then browse to the VM's virtual disk (the `.vmdk` or `.vdi` file inside your VirtualBox VM folder). Select it and click Finish.
+![[Pasted image 20260803225158.png]]
+
+2. **Open the right partition.** In the Evidence Tree on the left, expand the disk you just added. You will usually see more than one partition. Expand the main Windows partition, which is normally the largest NTFS one, until you reach its root, shown as `[root]`.
+![[Pasted image 20260803225455.png]]
+
+3. **Navigate to the profile.** Drill down through `Users > regdemo`. The file list on the right now shows everything in that profile folder, including the hidden system files that Explorer keeps out of sight.
+
+![[Pasted image 20260803225617.png]]
+
+4. **Select all three files together.** In the file list, find `NTUSER.DAT`, `NTUSER.DAT.LOG1`, and `NTUSER.DAT.LOG2`. Click the first, then hold Ctrl and click the other two so all three are highlighted at once, in a single selection.
+
+![[Pasted image 20260803225803.png]]
+
+5. **Export them.** Right-click the highlighted files and choose **Export Files**. When the folder picker appears, point it at a brand-new empty folder created just for this capture.
+
+6. **Check the result.** FTK Imager reports how many files it copied and flags any errors. 
+   ![[Pasted image 20260803230427.png]]
+
+7. **Confirm** all three arrived and that the sizes look right, with `NTUSER.DAT` much larger than the two logs. This exported set is your evidence. 
+   ![[Pasted image 20260803230406.png]]
+
+Two practical rules:
+
+1. **Export all three files in one operation, into a brand-new empty folder.** Mixing files from different captures produces mismatched hive and log sets that will not replay correctly.
+2. **Never use `reg save` or `reg export` for this.** Those produce a re-serialised copy of the live registry. Suhanov (2020) tested this and found that an export does not preserve everything: data beyond the last hive bin is not written out, so a small portion of recoverable deleted keys and values is lost even though it still exists in the original hive. Raw acquisition only.
+
+#### Step 5: The resurrection using Registry Explorer
+
+Now the deleted key gets pulled back out of the hive. This is where the three files from Step 4 earn their keep. Registry Explorer reads `NTUSER.DAT`, but it also replays the two `.LOG` files alongside it, which is why we grabbed all three together rather than the hive on its own.
+
+Work through the following.
+
+1. **Load the hive.** Open Registry Explorer and go to `File > Load hive`. Browse to the capture folder from Step 4 and select `NTUSER.DAT`. If Registry Explorer detects that the hive is dirty and that transaction logs are present, it will ask whether you want to replay them. Say **yes**, and point it at the two `.LOG` files in the same folder when prompted. Replaying the logs brings the hive to its true final state before you start looking.
+
+2. **Confirm deleted record recovery is on.** Registry Explorer carves deleted records automatically when it loads a hive, so there is no button to press here. You confirm it worked by looking at the tree on the left. Two special nodes appear near the top, separate from the normal live keys: **Associated deleted records** and **Unassociated deleted records**. If you see those, recovery ran.
+
+3. **Open the Associated deleted records node.** Expand **Associated deleted records**. This is the bucket that matters, because these are the deleted items that still carry a pointer back to their parent, so Registry Explorer can rebuild where they lived. Expand it one level at a time and follow the path down. You are walking the same route the attacker's command used, in reverse:
+
+![[Pasted image 20260803231543.png]]
+
+Selecting the recovered key showed the `Payload` value with its data fully intact: `C:\Users\regdemo\payload.exe`, flagged as deleted, with its last write timestamp preserved.
+
+**This is the result the whole lab was built for.** Not just the data, but the location. The status bar confirms it:
+`Key: Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo`
+
+Body and grave, both recovered. Not just _what_ was deleted, but _where_ it lived.
+
+#### An honest detail: partial recovery
+
+Two values were planted (`Payload` and `Config`), but only `Payload` came back. The `Config` value's cell did not show up, possibly because the cell had been reused.
+
+This is worth stating plainly because it is realistic. Cell reuse happens **per cell**, not per key. Recovery is not all-or-nothing, and a recovered artifact may be incomplete. It is a lead to corroborate, not a complete record. Via (2019) makes a related warning: when cells have been reused, tools "will make incorrect deleted value associations and output invalid data," so recovered entries should always be treated as leads rather than conclusions.
+
+---
+
+## 3. Conclusion and next step
+
+### What Part 1 established
+
+- Deleting from the Windows registry does not erase the data. It marks the space as reusable, and the content survives until something overwrites it (Thomassen, 2008; Via, 2019).
+- **Rebooting between creating and deleting the artifact is essential.** Without it, the change may live and die entirely in memory and never reach the disk at all, leaving nothing to recover.
+- Recovery is a race against cell reuse. Nothing is guaranteed, and acquiring early matters.
+- There is a critical difference between recovering **data** and recovering **location**, and only the second one carries real evidential weight (Carvey, 2008).
+- Deleting a key rather than a value is what makes an associated, path-preserving recovery possible.
+- A deleted persistence key on Windows 7 was successfully recovered with its full registry path intact, using free tools.
+
+### What is coming next
+
+**Part 2: The Modern Windows Problem.** The identical procedure was run on Windows 11, and the results were noticeably different, particularly around how quickly free cells get reused and what happened to the registry backup folder. Part 2 covers that comparison honestly, including the attempts that failed and why.
+
+### Credit
+
+This lab was built and documented as part of my ongoing learning through the **CyLynk** platform. Thanks to Sammy Chuck and CyLynk for providing the structure and direction that turned this pile of miserable daydreaming SOC-analyst-to-be's scattered forensic curiosity into an actual, reproducible investigation.
+
+---
+
+## 4. Reference
+
+**Primary research**
+
+- Via, D. (2019). *Digging Up the Past: Windows Registry Forensics Revisited*. FireEye / Trellix.
+  https://www.trellix.com/en-au/blogs/research/digging-up-the-past-windows-registry-forensics-revisited/
+- Thomassen, J. (2008). *Forensic Analysis of Unallocated Space in Windows Registry Hive Files*. University of Liverpool.
+  https://sentinelchicken.com/research/thomassen_registry_unallocated_space/
+- Morgan, T. D. (2008). *Recovering deleted data from the Windows registry*. Digital Investigation, 5, S33-S41.
+  https://www.sciencedirect.com/science/article/pii/S1742287608000303
+
+**Registry internals and tooling**
+
+- Suhanov, M. (n.d.-a). *Windows registry file format specification*.
+  https://github.com/msuhanov/regf/blob/master/Windows%20registry%20file%20format%20specification.md
+- Suhanov, M. (2018). *Tools that recover deleted registry data don't do the same job*. dfir.ru
+  https://dfir.ru/2018/11/18/tools-that-recover-deleted-registry-data-dont-do-the-same-job/
+- Suhanov, M. (2020). *Exporting registry hives from a live system*. dfir.ru
+  https://dfir.ru/2020/10/03/exporting-registry-hives-from-a-live-system/
+- Suhanov, M. (n.d.-b). *yarp: yet another registry parser*.
+  https://github.com/msuhanov/yarp
+
+**Practitioner guidance**
+
+- Carvey, H. (2008). *Deleted Keys in the Registry*. Windows Incident Response.
+  http://windowsir.blogspot.com/2008/07/deleted-keys-in-registry.html
+- Carvey, H. (2019). *Registry Transaction Logs, pt II*. Windows Incident Response.
+  http://windowsir.blogspot.com/2019/04/registry-transaction-logs-pt-ii.html
+- Rathbun, A. *Registry Explorer / RECmd guide*. AboutDFIR.
+  https://aboutdfir.com/toolsandartifacts/windows/registry-explorer-recmd/
+- Fortuna, A. (2021). *Windows registry Transaction Logs in forensic analysis*.
+  https://andreafortuna.org/2021/02/06/windows-registry-transaction-logs-in-forensic-analysis/
+
+**Tools used**
+
+- Zimmerman, E. *Registry Explorer*. https://ericzimmerman.github.io/
+- Exterro. *FTK Imager*. https://www.exterro.com/digital-forensics-software/ftk-imager
+- Kroll. *KAPE*. https://www.kroll.com/en/services/cyber/incident-response-litigation-support/kroll-artifact-parser-extractor-kape
+
+**Microsoft documentation**
+
+- Microsoft. (n.d.). *RegFlushKey function (registry lazy flush behaviour)*.
+  https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regflushkey
+- Microsoft. (2019). *The system registry is no longer backed up to the RegBack folder starting in Windows 10 version 1803*.
+  https://learn.microsoft.com/en-us/troubleshoot/windows-client/installing-updates-features-roles/system-registry-no-backed-up-regback-folder
+
+**Threat context**
+
+- Mandiant, _M-Trends (2026)_, [https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026/](https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026/)
+- MITRE ATT&CK. (n.d.-a). *T1547.001: Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder*.
+  https://attack.mitre.org/techniques/T1547/001/
+- MITRE ATT&CK. (n.d.-b). *T1112: Modify Registry*. https://attack.mitre.org/techniques/T1112/
+- MITRE ATT&CK. (n.d.-c). *T1070: Indicator Removal*. https://attack.mitre.org/techniques/T1070/
+
+**Training**
+
 - 13Cubed (Davis, R.). *Investigating Windows Endpoints*. https://www.13cubed.com/
+
 
