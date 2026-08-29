@@ -68,7 +68,7 @@ Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Window
 | UsrClass.dat                                | User profile (AppData)       | File associations, shell data      |
 
 On Windows machines, these Windows Registry files can be accessed from Registry Editor.
-![[Pasted image 20260731104224.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%202.png" />
 Figure 2: Type "reg" on search and look for "Registry Editor". These are called `Root registry keys`, and everything under this area is called a `subkey`. 
 
 
@@ -90,7 +90,7 @@ The on-disk hive lags behind. Microsoft (n.d.) documents that the registry uses 
 
 Before writing dirty data to the primary hive file, the flush process first stores that data in a transaction log file, so that if a crash interrupts the write, the log holds enough information to bring the hive back to a consistent state (Suhanov, n.d.-a). These journal files sit right beside the hive, named `NTUSER.DAT.LOG1` and `NTUSER.DAT.LOG2`.
 
-![[Pasted image 20260803215518.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%203.png" />
 Figure 3: executing the command `dir /a` from `C:\Users\[your username]` on CMD reveals `NTUSER.DAT`, along with its corresponding `ntuser.dat.LOG1` and `ntuser.dat.LOG2`. 
 
 > **Analogy:** picture a waiter taking your order. They write it on a notepad first (the log file), then enter it into the till later (the hive). If the till crashes, the notepad still has your order.
@@ -279,7 +279,7 @@ This is also realistic from a threat perspective. Plenty of real persistence is 
 #### Step 1: Bury the body
 
 Signed in as `regdemo`, the persistence key was created using the two commands broken down in Section 2.4.
-![[Pasted image 20260803224110.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%204.png" />
 *Figure 4. The persistence key created successfully under the Run key.*
 
 #### Step 2: Force it onto disk
@@ -295,7 +295,7 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo"
 ```
 
 Opening Regedit afterwards, the Run key looks completely clean. To a responder inspecting the live registry, this persistence never existed.
-![[Pasted image 20260803224214.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%205.png" />
 *Figure 5. The Run key after deletion. Nothing to see in Regedit.*
 
 The virtual machine was then shut down cleanly, freezing the freed cell in place.
@@ -307,26 +307,26 @@ The three files we need all live in the `regdemo` user's profile: the hive itsel
 With the VM shut down, work through the following.
 
 1. **Add the virtual disk as evidence.** Open FTK Imager and go to `File > Add Evidence Item`. In the Select Source window, choose **Image File**, click Next, then browse to the VM's virtual disk (the `.vmdk` or `.vdi` file inside your VirtualBox VM folder). Select it and click Finish.
-![[Pasted image 20260803225158.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%206.png" />
 
 2. **Open the right partition.** In the Evidence Tree on the left, expand the disk you just added. You will usually see more than one partition. Expand the main Windows partition, which is normally the largest NTFS one, until you reach its root, shown as `[root]`.
-![[Pasted image 20260803225455.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%207.png" />
 
 3. **Navigate to the profile.** Drill down through `Users > regdemo`. The file list on the right now shows everything in that profile folder, including the hidden system files that Explorer keeps out of sight.
 
-![[Pasted image 20260803225617.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%208.png" />
 
 4. **Select all three files together.** In the file list, find `NTUSER.DAT`, `NTUSER.DAT.LOG1`, and `NTUSER.DAT.LOG2`. Click the first, then hold Ctrl and click the other two so all three are highlighted at once, in a single selection.
 
-![[Pasted image 20260803225803.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%209.png" />
 
 5. **Export them.** Right-click the highlighted files and choose **Export Files**. When the folder picker appears, point it at a brand-new empty folder created just for this capture.
 
 6. **Check the result.** FTK Imager reports how many files it copied and flags any errors. 
-   ![[Pasted image 20260803230427.png]]
+   <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2010.png" />
 
 7. **Confirm** all three arrived and that the sizes look right, with `NTUSER.DAT` much larger than the two logs. This exported set is your evidence. 
-   ![[Pasted image 20260803230406.png]]
+   <img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2011.png" /> 
 
 Two practical rules:
 
@@ -345,7 +345,7 @@ Work through the following.
 
 3. **Open the Associated deleted records node.** Expand **Associated deleted records**. This is the bucket that matters, because these are the deleted items that still carry a pointer back to their parent, so Registry Explorer can rebuild where they lived. Expand it one level at a time and follow the path down. You are walking the same route the attacker's command used, in reverse:
 
-![[Pasted image 20260803231543.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2012.png" /> 
 
 Selecting the recovered key showed the `Payload` value with its data fully intact: `C:\Users\regdemo\payload.exe`, flagged as deleted, with its last write timestamp preserved.
 
