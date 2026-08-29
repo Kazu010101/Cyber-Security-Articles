@@ -58,7 +58,7 @@ Think of the Windows registry as a building manager's logbook. Every tenant (pro
 
 On disk, the logbook is not one file. In fact, there is no actual file path of registry logbook on disk. Rather, it is split into several binary files called **hives**, in which most of the main chunk of it is located on `%SystemRoot%`. By default, this is usually located at `C:\Windows\System32\config`.
 
-![[Pasted image 20260731103456.png]]
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%201.png" />
 Figure 1: The DEFAULT, SYSTEM, SAM, SOFTWARE, SECURITY hives, viewed from Windows Explorer at `C:\Windows\System32\config`
 
 | Hive                                        | Location                     | What it holds                      |
