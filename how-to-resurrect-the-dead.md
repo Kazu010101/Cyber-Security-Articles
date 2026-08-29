@@ -348,12 +348,14 @@ Now the deleted key gets pulled back out of the hive. This is where the three fi
 Work through the following.
 
 1. **Load the hive.** Open Registry Explorer and go to `File > Load hive`. Browse to the capture folder from Step 4 and select `NTUSER.DAT`. If Registry Explorer detects that the hive is dirty and that transaction logs are present, it will ask whether you want to replay them. Say **yes**, and point it at the two `.LOG` files in the same folder when prompted. Replaying the logs brings the hive to its true final state before you start looking.
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2012.png" />
 
 2. **Confirm deleted record recovery is on.** Registry Explorer carves deleted records automatically when it loads a hive, so there is no button to press here. You confirm it worked by looking at the tree on the left. Two special nodes appear near the top, separate from the normal live keys: **Associated deleted records** and **Unassociated deleted records**. If you see those, recovery ran.
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2013.png" />
 
 3. **Open the Associated deleted records node.** Expand **Associated deleted records**. This is the bucket that matters, because these are the deleted items that still carry a pointer back to their parent, so Registry Explorer can rebuild where they lived. Expand it one level at a time and follow the path down. You are walking the same route the attacker's command used, in reverse:
 
-<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2012.png" /> 
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%2014%20%26%2015.png" /> 
 
 Selecting the recovered key showed the `Payload` value with its data fully intact: `C:\Users\regdemo\payload.exe`, flagged as deleted, with its last write timestamp preserved.
 
