@@ -7,7 +7,7 @@ tags:
   - blue-team
   - portfolio
 Type: Article
-Version: 0.2 (Content Check by Cylynk)
+Version: 0.2 (Draft - Contently Undergoing Review by CyLynk)
 Created: 2026-07-10
 Audience: Entry level security analyst / digital forensic
 ---
