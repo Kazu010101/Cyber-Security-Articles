@@ -298,7 +298,7 @@ The virtual machine was **restarted**, for all the reasons set out in Section 2.
 Signed back in as `regdemo`, the entire key was deleted:
 
 ```
-reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo" /f
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v ResurrectionDemo /f
 ```
 
 Opening Regedit afterwards, the Run key looks completely clean. To a responder inspecting the live registry, this persistence never existed.
