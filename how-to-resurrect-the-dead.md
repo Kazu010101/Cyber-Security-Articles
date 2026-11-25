@@ -302,7 +302,7 @@ reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ResurrectionDemo"
 ```
 
 Opening Regedit afterwards, the Run key looks completely clean. To a responder inspecting the live registry, this persistence never existed.
-<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Figure%205.png](https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Screenshot%202026-07-22%20204124.png)" />
+<img width="940" height="367" alt="image" src="https://github.com/Kazu010101/Cyber-Security-Articles/blob/main/Screenshot%202026-07-22%20204124.png" />
 
 *Figure 5. The Run key after deletion. The entire key is deleted in Regedit.*
 
